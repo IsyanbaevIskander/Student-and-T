@@ -2,16 +2,16 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from app.db.models import RoleEnum
 
-class UserBase(BaseModel):
+class UserCreate(BaseModel):
     email: EmailStr
-    role: RoleEnum = RoleEnum.STUDENT
-    tg_id: Optional[int] = None
-
-class UserCreate(UserBase):
     password: str
+    tg_username: Optional[str] = None
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: int
+    email: EmailStr
+    role: RoleEnum
+    tg_username: Optional[str] = None
 
     class Config:
         from_attributes = True
