@@ -13,6 +13,11 @@ class RoomTypeEnum(str, enum.Enum):
     GROUP = "GROUP"
     SOLO = "SOLO"
 
+class ApplicationStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
 class BookingStatusEnum(str, enum.Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -29,9 +34,13 @@ class User(Base):
 class MentorProfile(Base):
     __tablename__ = "mentor_profiles"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    hub_id: Mapped[int] = mapped_column(ForeignKey("hubs.id"))
     bio: Mapped[str | None] = mapped_column(String, nullable=True)
     resume_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    skills: Mapped[str | None] = mapped_column(String, nullable=True)  # Comma separated or JSON array
+    skills: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[ApplicationStatusEnum] = mapped_column(
+        Enum(ApplicationStatusEnum), default=ApplicationStatusEnum.PENDING
+    )
 
 class Hub(Base):
     __tablename__ = "hubs"

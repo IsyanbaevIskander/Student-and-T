@@ -1,8 +1,8 @@
 """Init
 
-Revision ID: 33d7e12293d2
+Revision ID: 4ebdd17ca530
 Revises: 
-Create Date: 2026-04-16 09:29:10.548352
+Create Date: 2026-04-16 11:25:43.231330
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '33d7e12293d2'
+revision: str = '4ebdd17ca530'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -33,16 +33,19 @@ def upgrade() -> None:
     sa.Column('email', sa.String(), nullable=False),
     sa.Column('hashed_password', sa.String(), nullable=False),
     sa.Column('role', sa.Enum('STUDENT', 'MENTOR', 'ADMIN', name='roleenum'), nullable=False),
-    sa.Column('tg_id', sa.Integer(), nullable=True),
+    sa.Column('tg_username', sa.String(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
     op.create_table('mentor_profiles',
     sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('hub_id', sa.Integer(), nullable=False),
     sa.Column('bio', sa.String(), nullable=True),
     sa.Column('resume_url', sa.String(), nullable=True),
     sa.Column('skills', sa.String(), nullable=True),
+    sa.Column('status', sa.Enum('PENDING', 'APPROVED', 'REJECTED', name='applicationstatusenum'), nullable=False),
+    sa.ForeignKeyConstraint(['hub_id'], ['hubs.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('user_id')
     )
