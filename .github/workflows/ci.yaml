@@ -13,29 +13,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Docker login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Login to Cloud.ru Container Registry
+        run: |
+          docker login tiir-registry.cr.cloud.ru \
+            --username ${{ secrets.DOCKER_USERNAME }} \
+            --password ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push backend docker image
+      - name: Build and push backend docker image to Cloud.ru registry
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/backend-student-and-t:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/backend-student-and-t:latest
+            tiir-registry.cr.cloud.ru/backend-student-and-t:latest
 
-      - name: Build and push frontend docker image
+      - name: Build and push frontend docker image to Cloud.ru registry
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:${{ github.sha }}
-            ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:latest
+            tiir-registry.cr.cloud.ru/frontend-student-and-t:latest
 
       - name: Install cloudlogin
         run: |
@@ -52,4 +50,3 @@ jobs:
         run: |
           kubectl apply -f deploy/backend
           kubectl apply -f deploy/frontend
-    
