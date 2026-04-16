@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // Базовый URL API (можно вынести в .env)
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
 // Создаём инстанс axios с базовыми настройками
 const apiClient = axios.create({

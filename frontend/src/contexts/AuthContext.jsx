@@ -40,7 +40,6 @@ export const AuthProvider = ({ children }) => {
     loadUser()
   }, [])
 
-  // Функция входа
   const login = useCallback(async (email, password) => {
     try {
       const data = await loginApi(email, password)
@@ -49,11 +48,10 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true)
       return { success: true, data }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка входа' }
+      return { success: false, error: error.detail || 'Ошибка входа' }
     }
   }, [])
 
-  // Функция регистрации
   const register = useCallback(async (userData) => {
     try {
       const data = await registerApi(userData)
@@ -64,7 +62,7 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true)
       return { success: true, data: loginResult }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка регистрации' }
+      return { success: false, error: error.detail || 'Ошибка регистрации' }
     }
   }, [login])
 
@@ -76,14 +74,13 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false)
   }, [])
 
-  // Обновление данных пользователя
   const updateUser = useCallback(async (userData) => {
     try {
       const updatedUser = await updateUserApi(userData)
       setUser(updatedUser)
       return { success: true, data: updatedUser }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка обновления данных' }
+      return { success: false, error: error.detail || 'Ошибка обновления данных' }
     }
   }, [])
 

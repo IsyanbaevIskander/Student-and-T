@@ -7,8 +7,7 @@ const RegisterPage = () => {
     email: '',
     password: '',
     passwordConfirmation: '',
-    firstName: '',
-    lastName: '',
+    tg_username: '',
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -52,15 +51,13 @@ const RegisterPage = () => {
     const result = await register({
       email: formData.email,
       password: formData.password,
-      passwordConfirmation: formData.passwordConfirmation,
-      firstName: formData.firstName,
-      lastName: formData.lastName,
+      tg_username: formData.tg_username,
     })
     
     if (result.success) {
       navigate('/dashboard') // После регистрации в личный кабинет
     } else {
-      setError(result.error || 'Ошибка регистрации')
+      setError(result.error?.detail || 'Ошибка регистрации')
     }
     
     setIsLoading(false)
@@ -79,27 +76,14 @@ const RegisterPage = () => {
         
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Имя (необязательно)</label>
+            <label className="block text-gray-700 mb-2">Telegram username (необязательно)</label>
             <input 
               type="text"
-              name="firstName"
-              value={formData.firstName}
+              name="tg_username"
+              value={formData.tg_username}
               onChange={handleChange}
               className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-tbank-yellow"
-              placeholder="Иван"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-gray-700 mb-2">Фамилия (необязательно)</label>
-            <input 
-              type="text"
-              name="lastName"
-              value={formData.lastName}
-              onChange={handleChange}
-              className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:border-tbank-yellow"
-              placeholder="Иванов"
+              placeholder="@student"
               disabled={isLoading}
             />
           </div>
