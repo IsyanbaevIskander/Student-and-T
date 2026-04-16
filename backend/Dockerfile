@@ -13,7 +13,9 @@ FROM python:3.11-slim
 WORKDIR /backend
 
 RUN addgroup --system --gid 1001 appgroup && \
-    adduser --system --uid 1001 --gid 1001 appuser
+    adduser --system --uid 1001 --gid 1001 appuser && \
+    mkdir -p /backend/uploads/resumes && \
+    chown -R appuser:appgroup /backend
 
 COPY --from=builder --chown=appuser:appgroup /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder --chown=appuser:appgroup /usr/local/bin /usr/local/bin
