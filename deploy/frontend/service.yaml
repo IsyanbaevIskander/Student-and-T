@@ -1,0 +1,15 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: backend-app-service
+  labels:
+    app: backend-app
+spec:
+  type: ClusterIP
+  selector:
+    app: backend-app
+  ports:
+    - name: http
+      port: 5173
+      targetPort: 5173
+      protocol: TCP
