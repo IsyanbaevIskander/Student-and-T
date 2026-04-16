@@ -16,10 +16,10 @@ spec:
     spec:
       containers:
         - name: backend-app-container
-          image: backend/student_and_t:v1
+          image: tiir-registry.cr.cloud.ru/backend-student-and-t:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - containerPort: 8000
               name: http
           envFrom:
             - secretRef:
@@ -31,3 +31,4 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+  
