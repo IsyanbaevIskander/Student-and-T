@@ -5,7 +5,7 @@ WORKDIR /backend
 # We install uv and use it to install the environment
 RUN pip install uv
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 # No poetry.lock or uv.lock yet, so we just let it install according to pyproject
 RUN uv pip install --system -e .
 
