@@ -1,15 +1,25 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /backend
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml .
+
+RUN uv pip install --system --no-cache -e .
+
 FROM python:3.11-slim
 
 WORKDIR /backend
 
-# We install uv and use it to install the environment
-RUN pip install uv
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --gid 1001 appuser
 
-COPY pyproject.toml README.md ./
-# No poetry.lock or uv.lock yet, so we just let it install according to pyproject
-RUN uv pip install --system -e .
+COPY --from=builder --chown=appuser:appgroup /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --chown=appuser:appgroup . .
 
-COPY . .
+USER appuser
 
-# Run uvicorn server
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+EXPOSE 8080
+
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
