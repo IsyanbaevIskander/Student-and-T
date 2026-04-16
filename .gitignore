@@ -1,0 +1,43 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+backend/.venv/
+venv/
+
+# ===== Node.js =====
+node_modules/
+dist/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== Environment =====
+.env
+*.env.local
+
+# ===== Docker =====
+postgres_data/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Alembic =====
+# Keep migration versions tracked, but ignore pycache
+alembic/__pycache__/
+alembic/versions/__pycache__/
+
+# ===== UV / pip =====
+uv.lock
+
+# ===== Misc =====
+*.log
+*.bak
