@@ -1,20 +1,26 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
+from app.db.models import ApplicationStatusEnum
 
-class MentorProfileBase(BaseModel):
+class MentorApplyRequest(BaseModel):
+    hub_id: int
+
+class MentorProfileResponse(BaseModel):
+    user_id: int
+    hub_id: int
     bio: Optional[str] = None
     resume_url: Optional[str] = None
     skills: Optional[str] = None
-
-class MentorProfileUpdate(MentorProfileBase):
-    pass
-
-class MentorProfileResponse(MentorProfileBase):
-    user_id: int
+    status: ApplicationStatusEnum
 
     class Config:
         from_attributes = True
+
+class MentorProfileUpdate(BaseModel):
+    bio: Optional[str] = None
+    resume_url: Optional[str] = None
+    skills: Optional[str] = None
 
 class MentorSlotBase(BaseModel):
     start_at: datetime
