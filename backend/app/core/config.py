@@ -14,6 +14,12 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     GIGACHAT_CREDENTIALS: str = os.getenv("GIGACHAT_CREDENTIALS", "")
 
+    # File upload settings
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/backend/uploads/resumes")
+    MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB in bytes
+    ALLOWED_EXTENSIONS: set = {'.pdf'}
+    ALLOWED_MIME_TYPES: set = {'application/pdf'}
+
     @property
     def database_url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

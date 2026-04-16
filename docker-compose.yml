@@ -24,8 +24,11 @@ services:
       - .env
     environment:
       - POSTGRES_HOST=db
+      - UPLOAD_DIR=/backend/uploads/resumes
+      - MAX_FILE_SIZE=10485760
     volumes:
       - ./backend:/backend
+      - uploads_data:/backend/uploads
     depends_on:
       - db
 
@@ -45,4 +48,5 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
 

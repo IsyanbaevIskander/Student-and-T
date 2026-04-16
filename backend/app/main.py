@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.api.endpoints import auth, hubs, bookings, mentors
+from app.api.endpoints import auth, hubs, bookings, mentors, admin
 from app.db.base import Base
 from app.db.session import engine
 from app.db.models import * # Import models to register them with Base.metadata
@@ -29,11 +30,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/uploads", StaticFiles(directory="/backend/uploads"), name="uploads")
+
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(hubs.router, prefix="/hubs", tags=["hubs"])
 api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
 api_router.include_router(mentors.router, prefix="/mentors", tags=["mentors"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 app.include_router(api_router)
 
