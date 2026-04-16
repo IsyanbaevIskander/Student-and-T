@@ -1,0 +1,38 @@
+/* TinkoffSans Regular */
+@font-face {
+  font-family: 'TinkoffSans';
+  src: url('/assets/fonts/TinkoffSans-Regular.eot');
+  src: url('/assets/fonts/TinkoffSans-Regular.eot?#iefix') format('embedded-opentype'),
+       url('/assets/fonts/TinkoffSans-Regular.woff2') format('woff2'),
+       url('/assets/fonts/TinkoffSans-Regular.woff') format('woff'),
+       url('/assets/fonts/TinkoffSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* TinkoffSans Medium */
+@font-face {
+  font-family: 'TinkoffSans';
+  src: url('/assets/fonts/TinkoffSans-Medium.eot');
+  src: url('/assets/fonts/TinkoffSans-Medium.eot?#iefix') format('embedded-opentype'),
+       url('/assets/fonts/TinkoffSans-Medium.woff2') format('woff2'),
+       url('/assets/fonts/TinkoffSans-Medium.woff') format('woff'),
+       url('/assets/fonts/TinkoffSans-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* TinkoffSans Bold */
+@font-face {
+  font-family: 'TinkoffSans';
+  src: url('/assets/fonts/TinkoffSans-Bold.eot');
+  src: url('/assets/fonts/TinkoffSans-Bold.eot?#iefix') format('embedded-opentype'),
+       url('/assets/fonts/TinkoffSans-Bold.woff2') format('woff2'),
+       url('/assets/fonts/TinkoffSans-Bold.woff') format('woff'),
+       url('/assets/fonts/TinkoffSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

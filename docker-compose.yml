@@ -5,10 +5,8 @@ services:
     image: postgres:15-alpine
     container_name: student_t_db
     restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-student_t_db}
+    env_file:
+      - .env
     ports:
       - "5433:5432"
     volumes:
