@@ -140,3 +140,21 @@ code {
     @apply bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition;
   }
 }
+
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Дополнительные утилиты для Tailwind (если нужны) */
+@layer utilities {
+  .border-3 {
+    border-width: 3px;
+  }
+}

@@ -57,14 +57,21 @@ export const AuthProvider = ({ children }) => {
       const data = await registerApi(userData)
       // После регистрации сразу логиним пользователя
       const loginResult = await loginApi(userData.email, userData.password)
-      setUser(loginResult.user)
+      // Добавляем роль client к пользователю
+      const userWithRole = { ...loginResult.user, role: 'client' }
+      setUser(userWithRole)
       setToken(loginResult.access_token)
       setIsAuthenticated(true)
-      return { success: true, data: loginResult }
+      // Сохраняем в localStorage обновленного пользователя с ролью
+      localStorage.setItem('user', JSON.stringify(userWithRole))
+      return { success: true, data: { ...loginResult, user: userWithRole } }
     } catch (error) {
       return { success: false, error: error.detail || 'Ошибка регистрации' }
     }
-  }, [login])
+  }, [])
+
+
+  
 
   // Функция выхода
   const logout = useCallback(async () => {
