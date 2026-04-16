@@ -24,14 +24,18 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: backend/student_and_t:v1
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/backend-student-and-t:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/backend-student-and-t:latest
 
       - name: Build and push frontend docker image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: frontend/student_and_t:v1
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:latest
 
       - name: Setup kubeconfig
         run: |
@@ -42,3 +46,4 @@ jobs:
         run: |
           kubectl apply -f deploy/backend
           kubectl apply -f deploy/frontend
+    
