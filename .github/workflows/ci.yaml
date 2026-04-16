@@ -37,10 +37,16 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:${{ github.sha }}
             ${{ secrets.DOCKER_USERNAME }}/frontend-student-and-t:latest
 
+      - name: Install cloudlogin
+        run: |
+          curl -LO https://github.com/cloud-ru-tech/cloudlogin/releases/download/v1.0.2/cloudlogin_Linux_amd64.tar.gz
+          tar -xzf cloudlogin_Linux_amd64.tar.gz
+          sudo mv cloudlogin /usr/local/bin/
+
       - name: Setup kubeconfig
         run: |
           mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 --decode > $HOME/.kube/config
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
 
       - name: Deploy services
         run: |
