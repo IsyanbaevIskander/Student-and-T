@@ -1,0 +1,19 @@
+kind: Ingress
+metadata:
+  name: frontend-app-ingress
+  labels:
+    app: frontend-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: it.hub.student
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-app-service
+            port:
+              number: 80

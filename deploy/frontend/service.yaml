@@ -1,15 +1,15 @@
 kind: Service
 apiVersion: v1
 metadata:
-  name: backend-app-service
+  name: frontend-app-service
   labels:
-    app: backend-app
+    app: frontend-app
 spec:
   type: ClusterIP
   selector:
-    app: backend-app
+    app: frontend-app
   ports:
     - name: http
-      port: 5173
+      port: 80
       targetPort: 5173
       protocol: TCP
