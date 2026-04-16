@@ -1,12 +1,24 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.endpoints import auth, hubs, bookings, mentors
+from app.db.base import Base
+from app.db.session import engine
+from app.db.models import * # Import models to register them with Base.metadata
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 app = FastAPI(
     title="Student and T",
     description="API for Hub interaction platform",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
