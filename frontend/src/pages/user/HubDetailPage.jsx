@@ -1,322 +1,388 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getHubById, getAvailablePlaces, bookPlace } from '../../api/hubs'
+import { QRCodeSVG } from 'qrcode.react'
+import { getHubById } from '../../api/hubs'
+import { createBooking } from '../../api/bookings'
 import { useAuth } from '../../hooks/useAuth'
 import Loader from '../../components/ui/Loader'
-import HallSchema from '../../components/halls/HallSchema'
 
 const HubDetailPage = () => {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAuthenticated, user } = useAuth()
-  
+  const { isAuthenticated, user, updateUser } = useAuth()
+
   const [hub, setHub] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [selectedHall, setSelectedHall] = useState(null)
-  const [availablePlaces, setAvailablePlaces] = useState([])
-  const [selectedPlace, setSelectedPlace] = useState(null)
-  const [bookingDate, setBookingDate] = useState('')
-  const [bookingTime, setBookingTime] = useState('')
-  const [showBookingModal, setShowBookingModal] = useState(false)
   const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookedData, setBookedData] = useState(null)
 
-  // Загрузка данных хаба
+  // Состояние формы
+  const [bookingType, setBookingType] = useState('INDIVIDUAL')
+  const [bookingDate, setBookingDate] = useState('')
+  const [formData, setFormData] = useState({
+    last_name: '',
+    first_name: '',
+    middle_name: '',
+    phone_number: '',
+    event_description: '',
+    event_attendees: 1,
+    start_time: '09:00',
+    end_time: '21:00'
+  })
+
+  // Подтягиваем данные пользователя
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        last_name: user.last_name || '',
+        first_name: user.first_name || '',
+        middle_name: user.middle_name || '',
+        phone_number: user.phone_number || ''
+      }))
+    }
+  }, [user])
+
   useEffect(() => {
     const fetchHub = async () => {
-      setLoading(true)
       try {
         const data = await getHubById(parseInt(id))
         setHub(data)
-        // Автоматически выбираем первый зал
-        if (data.halls && data.halls.length > 0) {
-          setSelectedHall(data.halls[0])
-        }
       } catch (error) {
         console.error('Ошибка загрузки хаба:', error)
       } finally {
         setLoading(false)
       }
     }
-    
     fetchHub()
   }, [id])
 
-  // Загрузка доступных мест при выборе зала или даты
-  useEffect(() => {
-    if (selectedHall && selectedHall.type === 'individual' && bookingDate) {
-      const fetchPlaces = async () => {
-        try {
-          const data = await getAvailablePlaces(selectedHall.id, bookingDate)
-          setAvailablePlaces(data.places || [])
-        } catch (error) {
-          console.error('Ошибка загрузки мест:', error)
-        }
-      }
-      fetchPlaces()
-    }
-  }, [selectedHall, bookingDate])
+  const [error, setError] = useState(null)
 
-  const handleHallSelect = (hall) => {
-    setSelectedHall(hall)
-    setSelectedPlace(null)
-    setAvailablePlaces([])
-  }
-
-  const handleSelectPlace = (place) => {
-    setSelectedPlace(place)
-  }
-
-  const handleBooking = async () => {
+  const handleBooking = async (e) => {
+    e.preventDefault()
+    setError(null)
     if (!isAuthenticated) {
-      // Если не авторизован, перенаправляем на логин
-      navigate('/login', { state: { from: `/hubs/${id}` } })
+      navigate('/login', { state: { from: `/hub/${id}` } })
       return
     }
 
-    if (!bookingDate || !bookingTime) {
-      alert('Выберите дату и время')
-      return
-    }
-
-    if (selectedHall.type === 'individual' && !selectedPlace) {
-      alert('Выберите место')
+    if (!bookingDate) {
+      setError('Пожалуйста, выберите дату посещения')
       return
     }
 
     setBookingLoading(true)
     try {
-      const bookingData = {
-        hubId: hub.id,
-        hallId: selectedHall.id,
-        placeId: selectedHall.type === 'individual' ? selectedPlace.id : null,
-        date: bookingDate,
-        time: bookingTime,
-        userId: user.id,
-        type: selectedHall.type,
-        status: selectedHall.type === 'individual' ? 'pending_mentor' : 'pending_admin'
+      // 1. Если данные пользователя изменились или были пустыми, обновляем профиль
+      if (
+        formData.first_name !== user?.first_name ||
+        formData.last_name !== user?.last_name ||
+        formData.phone_number !== user?.phone_number
+      ) {
+        await updateUser({
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          middle_name: formData.middle_name,
+          phone_number: formData.phone_number
+        })
       }
+
+      // 2. Создаем бронирование
+      const startAt = new Date(bookingDate)
+      const [startH, startM] = formData.start_time.split(':')
+      startAt.setHours(parseInt(startH), parseInt(startM), 0, 0)
+
+      const endAt = new Date(bookingDate)
+      const [endH, endM] = formData.end_time.split(':')
+      endAt.setHours(parseInt(endH), parseInt(endM), 0, 0)
       
-      await bookPlace(bookingData)
-      alert('Бронирование отправлено на подтверждение!')
-      setShowBookingModal(false)
-      navigate('/my-bookings')
-    } catch (error) {
-      alert('Ошибка бронирования: ' + (error.message || 'Попробуйте позже'))
+      // Небольшая валидация
+      if (endAt <= startAt) {
+        setError('Время окончания должно быть позже времени начала')
+        setBookingLoading(false)
+        return
+      }
+
+      const bookingPayload = {
+        hub_id: parseInt(id),
+        start_at: startAt.toISOString(),
+        end_at: endAt.toISOString(),
+        booking_type: bookingType,
+        event_description: bookingType === 'EVENT' ? formData.event_description : null,
+        event_attendees: bookingType === 'EVENT' ? parseInt(formData.event_attendees) : null
+      }
+
+      const result = await createBooking(bookingPayload)
+      setBookedData(Array.isArray(result) ? result[0] : result)
+    } catch (err) {
+      // Выводим только текст ошибки без статус-кодов
+      const errorMessage = typeof err === 'string' ? err : (err.detail || 'Попробуйте отправить заявку позже');
+      setError(errorMessage)
     } finally {
       setBookingLoading(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Loader size="lg" text="Загрузка хаба..." />
-      </div>
-    )
-  }
-
-  if (!hub) {
-    return (
-      <div className="container mx-auto px-4 py-8 text-center">
-        <h2 className="text-2xl font-bold text-red-600">Хаб не найден</h2>
-        <button 
-          onClick={() => navigate('/book-space')}
-          className="mt-4 btn-primary"
-        >
-          Вернуться к списку
-        </button>
-      </div>
-    )
-  }
+  if (loading) return <div className="py-20 text-center"><Loader size="lg" /></div>
+  if (!hub) return <div className="py-20 text-center text-red-500">Хаб не найден</div>
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Кнопка назад */}
-      <button 
-        onClick={() => navigate('/book-space')}
-        className="mb-4 text-gray-600 hover:text-tbank-yellow transition flex items-center gap-1"
-      >
-        ← Назад к хабам
-      </button>
-
-      {/* Информация о хабе */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-        {hub.image && (
-          <img 
-            src={hub.image} 
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="bg-white rounded-[40px] shadow-sm border border-gray-100 overflow-hidden mb-8">
+        <div className="relative h-64 md:h-80">
+          <img
+            src={hub.image || 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200'}
+            className="w-full h-full object-cover"
             alt={hub.name}
-            className="w-full h-64 object-cover"
           />
-        )}
-        <div className="p-6">
-          <h1 className="text-3xl font-bold mb-2">{hub.name}</h1>
-          <div className="text-gray-600 mb-4">
-            📍 {hub.city}, {hub.address}
-          </div>
-          <p className="text-gray-700 mb-4">{hub.description}</p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-8">
             <div>
-              <h3 className="font-semibold mb-2">Удобства:</h3>
-              <ul className="flex flex-wrap gap-2">
-                {hub.facilities.map((facility, idx) => (
-                  <li key={idx} className="bg-gray-100 px-3 py-1 rounded-full text-sm">
-                    {facility}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Режим работы:</h3>
-              <p>{hub.workingHours}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Список залов */}
-      <h2 className="text-2xl font-bold mb-4">Залы и пространства</h2>
-      <div className="flex gap-4 mb-8 overflow-x-auto pb-2">
-        {hub.halls.map((hall) => (
-          <button
-            key={hall.id}
-            onClick={() => handleHallSelect(hall)}
-            className={`
-              px-6 py-3 rounded-lg font-semibold transition whitespace-nowrap
-              ${selectedHall?.id === hall.id 
-                ? 'bg-tbank-yellow text-black' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
-            `}
-          >
-            {hall.name} ({hall.type === 'individual' ? '👤 Индивидуальный' : '👥 Групповой'})
-          </button>
-        ))}
-      </div>
-
-      {/* Детали выбранного зала */}
-      {selectedHall && (
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="mb-6">
-            <h3 className="text-xl font-bold mb-2">{selectedHall.name}</h3>
-            <p className="text-gray-600 mb-2">{selectedHall.description}</p>
-            <div className="flex gap-4 text-sm">
-              <span className="bg-blue-100 px-3 py-1 rounded">
-                Вместимость: {selectedHall.capacity} чел.
-              </span>
-              <span className="bg-green-100 px-3 py-1 rounded">
-                Бесплатно для студентов
-              </span>
-            </div>
-            {selectedHall.type === 'group' && selectedHall.facilities && (
-              <div className="mt-3">
-                <span className="font-semibold">Оснащение:</span>
-                <ul className="flex flex-wrap gap-2 mt-1">
-                  {selectedHall.facilities.map((facility, idx) => (
-                    <li key={idx} className="bg-gray-100 px-2 py-1 rounded text-sm">
-                      {facility}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Форма бронирования */}
-          <div className="border-t pt-6">
-            <h4 className="font-semibold mb-4">Забронировать</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div>
-                <label className="block text-sm font-medium mb-1">Дата</label>
-                <input
-                  type="date"
-                  value={bookingDate}
-                  onChange={(e) => setBookingDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full border rounded-lg px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Время</label>
-                <select
-                  value={bookingTime}
-                  onChange={(e) => setBookingTime(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2"
-                >
-                  <option value="">Выберите время</option>
-                  <option value="10:00">10:00</option>
-                  <option value="11:00">11:00</option>
-                  <option value="12:00">12:00</option>
-                  <option value="13:00">13:00</option>
-                  <option value="14:00">14:00</option>
-                  <option value="15:00">15:00</option>
-                  <option value="16:00">16:00</option>
-                  <option value="17:00">17:00</option>
-                  <option value="18:00">18:00</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Схема зала для индивидуальных мест */}
-            {selectedHall.type === 'individual' && bookingDate && (
-              <div className="mb-6">
-                <HallSchema 
-                  hall={selectedHall}
-                  places={availablePlaces}
-                  onSelectPlace={handleSelectPlace}
-                />
-                {selectedPlace && (
-                  <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                    Выбрано место: <strong>{selectedPlace.number}</strong>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Кнопка бронирования */}
-            <button
-              onClick={() => setShowBookingModal(true)}
-              disabled={!bookingDate || !bookingTime || (selectedHall.type === 'individual' && !selectedPlace)}
-              className="w-full bg-tbank-yellow text-black font-semibold py-3 rounded-lg hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Забронировать
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно подтверждения */}
-      {showBookingModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold mb-4">Подтверждение бронирования</h3>
-            <div className="space-y-2 mb-6">
-              <p><strong>Хаб:</strong> {hub.name}</p>
-              <p><strong>Зал:</strong> {selectedHall.name}</p>
-              {selectedPlace && <p><strong>Место:</strong> {selectedPlace.number}</p>}
-              <p><strong>Дата:</strong> {bookingDate}</p>
-              <p><strong>Время:</strong> {bookingTime}</p>
-              <p className="text-sm text-gray-600 mt-4">
-                {selectedHall.type === 'individual' 
-                  ? '📌 После бронирования необходимо дождаться подтверждения ментора'
-                  : '📌 Групповые бронирования подтверждаются администратором'}
+              <h1 className="text-4xl font-bold text-white mb-2">{hub.name}</h1>
+              <p className="text-gray-200 text-lg flex items-center gap-2">
+                📍 {hub.location}
               </p>
             </div>
-            <div className="flex gap-3">
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Информация о хабе */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-gray-50 rounded-3xl p-6">
+            <h3 className="text-xl font-bold mb-4">О пространстве</h3>
+            <p className="text-gray-600 mb-6">{hub.info || hub.description}</p>
+
+            <div className="flex flex-wrap gap-2">
+              {(hub.facilities || ['Wi-Fi', 'Кофе', 'Принтер']).map((f, i) => (
+                <span key={i} className="px-3 py-1 bg-white border border-gray-100 rounded-full text-sm text-gray-500">
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 rounded-3xl p-6 border border-yellow-100">
+            <h4 className="font-bold text-yellow-800 mb-2">📢 Важно</h4>
+            <p className="text-sm text-yellow-700 leading-relaxed">
+              Для входа в хаб необходимо иметь при себе <b>документ, удостоверяющий личность</b> (паспорт или студенческий билет).
+            </p>
+          </div>
+        </div>
+
+        {/* Форма заявки */}
+        <div className="lg:col-span-2">
+          <form onSubmit={handleBooking} className="bg-white rounded-[40px] p-8 border border-gray-100 shadow-sm space-y-6">
+            <h2 className="text-2xl font-bold mb-6">Оформить заявку</h2>
+
+            {/* Выбор типа */}
+            <div className="flex p-1 bg-gray-100 rounded-2xl">
               <button
-                onClick={() => setShowBookingModal(false)}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+                type="button"
+                onClick={() => setBookingType('INDIVIDUAL')}
+                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition ${bookingType === 'INDIVIDUAL' ? 'bg-white shadow-sm' : 'text-gray-500'
+                  }`}
               >
-                Отмена
+                Личный визит
               </button>
               <button
-                onClick={handleBooking}
-                disabled={bookingLoading}
-                className="flex-1 bg-tbank-yellow text-black font-semibold py-2 rounded-lg hover:bg-yellow-500 disabled:opacity-50"
+                type="button"
+                onClick={() => setBookingType('EVENT')}
+                className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition ${bookingType === 'EVENT' ? 'bg-white shadow-sm' : 'text-gray-500'
+                  }`}
               >
-                {bookingLoading ? 'Бронирование...' : 'Подтвердить'}
+                Мероприятие
               </button>
             </div>
+
+            {/* Персональные данные */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-400 ml-1">Фамилия</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Иванов"
+                  value={formData.last_name}
+                  onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-400 ml-1">Имя</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Иван"
+                  value={formData.first_name}
+                  onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-400 ml-1">Отчество</label>
+                <input
+                  type="text"
+                  placeholder="Иванович"
+                  value={formData.middle_name}
+                  onChange={e => setFormData({ ...formData, middle_name: e.target.value })}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-400 ml-1">Телефон</label>
+                <input
+                  required
+                  type="tel"
+                  placeholder="+7 (999) 000-00-00"
+                  value={formData.phone_number}
+                  onChange={e => setFormData({ ...formData, phone_number: e.target.value })}
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                />
+              </div>
+            </div>
+
+            {/* Дата */}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-400 ml-1">Дата посещения</label>
+              <input
+                required
+                type="date"
+                min={new Date().toISOString().split('T')[0]}
+                value={bookingDate}
+                onChange={e => setBookingDate(e.target.value)}
+                className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+              />
+              {bookingType === 'INDIVIDUAL' && (
+                <p className="text-xs text-gray-400 ml-1">Бронирование действует на весь день (с 09:00 до 21:00)</p>
+              )}
+            </div>
+
+            {/* Поля времени для мероприятий */}
+            {bookingType === 'EVENT' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Время начала</label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Время окончания</label>
+                  <input
+                    type="time"
+                    required
+                    value={formData.end_time}
+                    onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Поля для мероприятия */}
+            {bookingType === 'EVENT' && (
+              <div className="space-y-4 pt-4 border-t border-gray-100">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Опишите мероприятие</label>
+                  <textarea
+                    required
+                    rows="3"
+                    placeholder="Лекция по Python, семинар по архитектуре и т.д."
+                    value={formData.event_description}
+                    onChange={e => setFormData({ ...formData, event_description: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                  ></textarea>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Кол-во людей</label>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    value={formData.event_attendees}
+                    onChange={e => setFormData({ ...formData, event_attendees: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Вывод ошибки */}
+            {error && (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-4 flex items-start gap-3 animate-fade-in">
+                <span className="text-xl"></span>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-red-800">{error}</p>
+                  {error.includes('забронировали') && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/dashboard')}
+                      className="text-xs font-bold text-red-600 underline mt-1 hover:text-red-700"
+                    >
+                      Перейти в личный кабинет
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">✕</button>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={bookingLoading}
+              className="w-full py-5 bg-tbank-yellow text-black font-bold rounded-2xl shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] transition disabled:opacity-50 disabled:hover:scale-100"
+            >
+              {bookingLoading ? <Loader size="sm" /> : 'Отправить заявку'}
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Модалка успеха */}
+      {bookedData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[40px] p-8 max-w-md w-full text-center animate-scale-in">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-4xl">✅</span>
+            </div>
+            <h3 className="text-3xl font-bold mb-4">Заявка принята!</h3>
+            <p className="text-gray-500 mb-8">
+              {bookedData.status === 'APPROVED' 
+                ? 'Ваше бронирование успешно создано. Вы можете использовать QR-код ниже для входа.' 
+                : 'Ваша заявка на мероприятие отправлена на рассмотрение. После одобрения администратором QR-код появится в личном кабинете.'}
+            </p>
+
+            {bookedData.status === 'APPROVED' ? (
+              <div className="bg-gray-50 p-6 rounded-3xl mb-8 border border-gray-100">
+                <p className="text-sm font-bold text-gray-400 mb-2 uppercase tracking-widest">Пропуск в хаб</p>
+                <div className="bg-white p-4 rounded-2xl shadow-inner flex justify-center mb-4">
+                  <QRCodeSVG value={bookedData.qr_code} size={150} />
+                </div>
+                <p className="text-xs text-gray-400">Покажите этот код на входе</p>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 p-6 rounded-3xl mb-8 border border-yellow-100 flex flex-col items-center">
+                <span className="text-4xl mb-4">⏳</span>
+                <p className="text-sm font-bold text-yellow-800 text-center">Ожидайте подтверждения</p>
+                <p className="text-xs text-yellow-600 mt-2 text-center">Мы уведомим вас, как только администратор рассмотрит заявку</p>
+              </div>
+            )}
+
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full py-4 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition"
+            >
+              В личный кабинет
+            </button>
           </div>
         </div>
       )}

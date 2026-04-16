@@ -8,6 +8,7 @@ import RegisterPage from './pages/auth/RegisterPage'
 import DashboardPage from './pages/user/DashboardPage'
 import BookSpacePage from './pages/user/BookSpacePage'
 import HubDetailPage from './pages/user/HubDetailPage'
+import AdminHubsPage from './pages/admin/AdminHubsPage'
 import MentorsPage from './pages/user/MentorsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
@@ -26,6 +27,11 @@ function App() {
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="book-space" element={<BookSpacePage />} />
             <Route path="hubs/:id" element={<HubDetailPage />} />
+            
+            {/* Админские маршруты */}
+            <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+              <Route path="admin/hubs" element={<AdminHubsPage />} />
+            </Route>
           </Route>
 
           {/* Маршруты ТОЛЬКО для менторов или администраторов */}

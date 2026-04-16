@@ -8,7 +8,7 @@ export const AuthContext = createContext(null)
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('access_token'))
-  const [isAuthenticated, setIsAuthenticated] = useState(!!token)
+  const [isAuthenticated, setIsAuthenticated] = useState(false) // Изначально false, пока не проверим токен
   const [loading, setLoading] = useState(true) // Начальная загрузка пользователя
 
   // Загрузка пользователя из localStorage при старте
@@ -57,14 +57,11 @@ export const AuthProvider = ({ children }) => {
       const data = await registerApi(userData)
       // После регистрации сразу логиним пользователя
       const loginResult = await loginApi(userData.email, userData.password)
-      // Добавляем роль client к пользователю
-      const userWithRole = { ...loginResult.user, role: 'client' }
-      setUser(userWithRole)
+      setUser(loginResult.user)
       setToken(loginResult.access_token)
       setIsAuthenticated(true)
-      // Сохраняем в localStorage обновленного пользователя с ролью
-      localStorage.setItem('user', JSON.stringify(userWithRole))
-      return { success: true, data: { ...loginResult, user: userWithRole } }
+      // Данные уже сохранены в localStorage внутри loginApi
+      return { success: true, data: loginResult }
     } catch (error) {
       return { success: false, error: error.detail || 'Ошибка регистрации' }
     }

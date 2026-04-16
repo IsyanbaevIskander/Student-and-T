@@ -1,5 +1,5 @@
 from typing import Any, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import deps
@@ -17,16 +17,51 @@ async def read_hubs(
     hubs = await crud_hub.get_hubs(db, skip=skip, limit=limit)
     return hubs
 
+@router.get("/{hub_id}", response_model=HubResponse)
+async def read_hub(
+    hub_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+) -> Any:
+    hub = await crud_hub.get_hub(db, hub_id=hub_id)
+    if not hub:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Hub not found")
+    return hub
+
 @router.post("/", response_model=HubResponse)
 async def create_hub(
     *,
     db: AsyncSession = Depends(deps.get_db),
     hub_in: HubCreate,
-    current_user = Depends(deps.get_current_active_user)
+    current_user = Depends(deps.get_current_admin_user)
 ) -> Any:
-    # In real app, verify if current_user is ADMIN
     hub = await crud_hub.create_hub(db, obj_in=hub_in)
     return hub
+
+@router.patch("/{hub_id}", response_model=HubResponse)
+async def update_hub(
+    *,
+    hub_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    hub_in: HubCreate, # Using HubCreate for simplicity in update as well, or we could use HubUpdate
+    current_user = Depends(deps.get_current_admin_user)
+) -> Any:
+    hub = await crud_hub.update_hub(db, hub_id=hub_id, obj_in=hub_in)
+    if not hub:
+        raise HTTPException(status_code=404, detail="Hub not found")
+    return hub
+
+@router.delete("/{hub_id}")
+async def delete_hub(
+    *,
+    hub_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_admin_user)
+) -> Any:
+    success = await crud_hub.delete_hub(db, hub_id=hub_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Hub not found")
+    return {"status": "success"}
 
 @router.get("/{hub_id}/rooms", response_model=List[RoomResponse])
 async def read_hub_rooms(

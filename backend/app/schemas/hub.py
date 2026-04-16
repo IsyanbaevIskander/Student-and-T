@@ -40,6 +40,11 @@ class HubBase(BaseModel):
 class HubCreate(HubBase):
     pass
 
+class HubUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    info: Optional[str] = None
+
 class HubResponse(HubBase):
     id: int
 
