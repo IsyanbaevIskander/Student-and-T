@@ -6,6 +6,7 @@ import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import DashboardPage from './pages/user/DashboardPage'
 import BookSpacePage from './pages/user/BookSpacePage'
+import HubDetailPage from './pages/user/HubDetailPage'
 import MentorsPage from './pages/user/MentorsPage'
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="register" element={<RegisterPage />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="book-space" element={<BookSpacePage />} />
+          <Route path="hubs/:id" element={<HubDetailPage />} />
           <Route path="mentors" element={<MentorsPage />} />
         </Route>
       </Routes>
