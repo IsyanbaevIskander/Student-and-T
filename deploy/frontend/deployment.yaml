@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: frontend-app-container
-          image: frontend/student_and_t:v1
+          image: tiir-registry.cr.cloud.ru/frontend-student-and-t:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 5173
