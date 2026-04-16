@@ -14,6 +14,10 @@ async def get_room_by_id(db: AsyncSession, room_id: int) -> Optional[Room]:
     stmt = select(Room).where(Room.id == room_id)
     return await db.scalar(stmt)
 
+async def get_hub(db: AsyncSession, hub_id: int) -> Optional[Hub]:
+    stmt = select(Hub).where(Hub.id == hub_id)
+    return await db.scalar(stmt)
+
 async def create_hub(db: AsyncSession, obj_in: HubCreate) -> Hub:
     db_obj = Hub(name=obj_in.name, location=obj_in.location, info=obj_in.info)
     db.add(db_obj)
@@ -21,11 +25,32 @@ async def create_hub(db: AsyncSession, obj_in: HubCreate) -> Hub:
     await db.refresh(db_obj)
     return db_obj
 
+async def update_hub(db: AsyncSession, hub_id: int, obj_in: HubCreate) -> Optional[Hub]:
+    stmt = select(Hub).where(Hub.id == hub_id)
+    db_obj = await db.scalar(stmt)
+    if not db_obj:
+        return None
+    
+    update_data = obj_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_obj, field, value)
+    
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj
+
+async def delete_hub(db: AsyncSession, hub_id: int) -> bool:
+    stmt = select(Hub).where(Hub.id == hub_id)
+    db_obj = await db.scalar(stmt)
+    if not db_obj:
+        return False
+    
+    await db.delete(db_obj)
+    await db.commit()
+    return True
+
 async def get_rooms_by_hub(db: AsyncSession, hub_id: int) -> List[Room]:
     stmt = select(Room).where(Room.hub_id == hub_id)
-    # Eager load seats if needed, but schema handles lazy well depending on config
-    # We will use selectinload just to be robust if the schema expects seats immediately
-    # Wait, seats are a separate table, we should load them. Let's add relationships to models later or fetch manually.
     result = await db.execute(stmt)
     return list(result.scalars().all())
     

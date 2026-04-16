@@ -8,7 +8,7 @@ export const AuthContext = createContext(null)
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem('access_token'))
-  const [isAuthenticated, setIsAuthenticated] = useState(!!token)
+  const [isAuthenticated, setIsAuthenticated] = useState(false) // Изначально false, пока не проверим токен
   const [loading, setLoading] = useState(true) // Начальная загрузка пользователя
 
   // Загрузка пользователя из localStorage при старте
@@ -40,7 +40,6 @@ export const AuthProvider = ({ children }) => {
     loadUser()
   }, [])
 
-  // Функция входа
   const login = useCallback(async (email, password) => {
     try {
       const data = await loginApi(email, password)
@@ -49,26 +48,22 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true)
       return { success: true, data }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка входа' }
+      return { success: false, error: error.detail || 'Ошибка входа' }
     }
   }, [])
 
-  // Функция регистрации
   const register = useCallback(async (userData) => {
     try {
       const data = await registerApi(userData)
       // После регистрации сразу логиним пользователя
       const loginResult = await loginApi(userData.email, userData.password)
-      // Добавляем роль client к пользователю
-      const userWithRole = { ...loginResult.user, role: 'client' }
-      setUser(userWithRole)
+      setUser(loginResult.user)
       setToken(loginResult.access_token)
       setIsAuthenticated(true)
-      // Сохраняем в localStorage обновленного пользователя с ролью
-      localStorage.setItem('user', JSON.stringify(userWithRole))
-      return { success: true, data: { ...loginResult, user: userWithRole } }
+      // Данные уже сохранены в localStorage внутри loginApi
+      return { success: true, data: loginResult }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка регистрации' }
+      return { success: false, error: error.detail || 'Ошибка регистрации' }
     }
   }, [])
 
@@ -83,14 +78,13 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(false)
   }, [])
 
-  // Обновление данных пользователя
   const updateUser = useCallback(async (userData) => {
     try {
       const updatedUser = await updateUserApi(userData)
       setUser(updatedUser)
       return { success: true, data: updatedUser }
     } catch (error) {
-      return { success: false, error: error.message || 'Ошибка обновления данных' }
+      return { success: false, error: error.detail || 'Ошибка обновления данных' }
     }
   }, [])
 

@@ -11,8 +11,8 @@ const HallSchema = ({ hall, places, onSelectPlace }) => {
   const [selectedPlaceId, setSelectedPlaceId] = useState(null)
 
   // Получаем размеры сетки (максимальные x и y)
-  const maxX = Math.max(...places.map(p => p.x || 0))
-  const maxY = Math.max(...places.map(p => p.y || 0))
+  const maxX = places.length > 0 ? Math.max(...places.map(p => p.x || 0)) : 0
+  const maxY = places.length > 0 ? Math.max(...places.map(p => p.y || 0)) : 0
   
   const gridCols = maxX + 1
   const gridRows = maxY + 1

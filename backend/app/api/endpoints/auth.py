@@ -9,7 +9,7 @@ from app.core import security
 from app.core.config import settings
 from app.crud import crud_user
 from app.schemas.token import Token
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import UserCreate, UserUpdate, UserResponse
 
 router = APIRouter()
 
@@ -49,3 +49,12 @@ async def read_users_me(
     current_user = Depends(deps.get_current_active_user)
 ) -> Any:
     return current_user
+
+@router.patch("/me", response_model=UserResponse)
+async def update_users_me(
+    user_in: UserUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    user = await crud_user.update_user(db, user=current_user, obj_in=user_in)
+    return user

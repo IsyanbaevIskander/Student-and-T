@@ -1,4 +1,5 @@
 import enum
+from typing import List
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Boolean, Enum, JSON
@@ -24,6 +25,10 @@ class BookingStatusEnum(str, enum.Enum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 
+class BookingTypeEnum(str, enum.Enum):
+    INDIVIDUAL = "INDIVIDUAL"
+    EVENT = "EVENT"
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -31,6 +36,10 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.STUDENT)
     tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String, nullable=True, default="")
+    last_name: Mapped[str | None] = mapped_column(String, nullable=True, default="")
+    middle_name: Mapped[str | None] = mapped_column(String, nullable=True, default="")
+    phone_number: Mapped[str | None] = mapped_column(String, nullable=True, default="")
 
 class Hub(Base):
     __tablename__ = "hubs"
@@ -38,6 +47,8 @@ class Hub(Base):
     name: Mapped[str] = mapped_column(String)
     location: Mapped[str] = mapped_column(String)
     info: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    bookings: Mapped[List["Booking"]] = relationship(back_populates="hub")
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -60,10 +71,19 @@ class Booking(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     seat_id: Mapped[int | None] = mapped_column(ForeignKey("seats.id"), nullable=True)
     room_id: Mapped[int | None] = mapped_column(ForeignKey("rooms.id"), nullable=True)
-    start_at: Mapped[datetime] = mapped_column(DateTime)
-    end_at: Mapped[datetime] = mapped_column(DateTime)
+    hub_id: Mapped[int | None] = mapped_column(ForeignKey("hubs.id"), nullable=True)
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[BookingStatusEnum] = mapped_column(Enum(BookingStatusEnum), default=BookingStatusEnum.PENDING)
     is_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    booking_type: Mapped[BookingTypeEnum] = mapped_column(Enum(BookingTypeEnum), default=BookingTypeEnum.INDIVIDUAL)
+    qr_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Поля для массовых мероприятий (EVENT)
+    event_description: Mapped[str | None] = mapped_column(String, nullable=True)
+    event_attendees: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    user: Mapped["User"] = relationship()
+    hub: Mapped["Hub"] = relationship(back_populates="bookings")
 
 # Добавим новые модели и поля
 
@@ -84,7 +104,7 @@ class MentorRequest(Base):
     status: Mapped[MentorRequestStatusEnum] = mapped_column(
         Enum(MentorRequestStatusEnum), default=MentorRequestStatusEnum.PENDING
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     
     # Связи
     student: Mapped["User"] = relationship("User", foreign_keys=[student_id])
