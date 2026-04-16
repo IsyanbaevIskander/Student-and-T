@@ -24,7 +24,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.STUDENT)
-    tg_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
 
 class MentorProfile(Base):
     __tablename__ = "mentor_profiles"

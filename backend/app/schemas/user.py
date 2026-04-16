@@ -5,7 +5,7 @@ from app.db.models import RoleEnum
 class UserBase(BaseModel):
     email: EmailStr
     role: RoleEnum = RoleEnum.STUDENT
-    tg_id: Optional[int] = None
+    tg_username: Optional[str] = None
 
 class UserCreate(UserBase):
     password: str
