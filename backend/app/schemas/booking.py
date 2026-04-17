@@ -21,6 +21,9 @@ class UserInBooking(BaseModel):
     phone_number: Optional[str] = ""
     email: str
 
+    class Config:
+        from_attributes = True
+
 class HubInBooking(BaseModel):
     id: int
     name: str

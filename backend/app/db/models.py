@@ -9,11 +9,22 @@ from app.db.base import Base
 class RoleEnum(str, enum.Enum):
     STUDENT = "STUDENT"
     MENTOR = "MENTOR"
-    ADMIN = "ADMIN"
+    HUB_ADMIN = "HUB_ADMIN"   # администратор хаба
+    ADMIN = "ADMIN"           # глобальный администратор
+
 
 class RoomTypeEnum(str, enum.Enum):
     GROUP = "GROUP"
     SOLO = "SOLO"
+
+# models.py
+class EventTypeEnum(str, enum.Enum):
+    LECTURE = "LECTURE"           # лекция
+    WORKSHOP = "WORKSHOP"         # воркшоп
+    HACKATHON = "HACKATHON"       # хакатон
+    MEETUP = "MEETUP"             # митап
+    COMPETITION = "COMPETITION"   # соревнование
+    OTHER = "OTHER"               # другое
 
 class ApplicationStatusEnum(str, enum.Enum):
     PENDING = "PENDING"
@@ -50,6 +61,16 @@ class Hub(Base):
     
     bookings: Mapped[List["Booking"]] = relationship(back_populates="hub")
 
+class HubAdmin(Base):
+    __tablename__ = "hub_admins"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    hub_id: Mapped[int] = mapped_column(ForeignKey("hubs.id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    
+    # Связи
+    user: Mapped["User"] = relationship("User", backref="hub_admins")
+    hub: Mapped["Hub"] = relationship("Hub", backref="admins")
+
 class Room(Base):
     __tablename__ = "rooms"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -84,6 +105,7 @@ class Booking(Base):
 
     user: Mapped["User"] = relationship()
     hub: Mapped["Hub"] = relationship(back_populates="bookings")
+    event_type: Mapped[EventTypeEnum | None] = mapped_column(Enum(EventTypeEnum), nullable=True)
 
 # Добавим новые модели и поля
 

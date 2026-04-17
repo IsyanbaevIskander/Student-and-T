@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 from app.db.models import Booking, BookingTypeEnum, BookingStatusEnum
 from app.schemas.booking import BookingCreate, BookingStatusUpdate
@@ -143,3 +143,42 @@ async def check_in_booking(db: AsyncSession, booking_id: int, user_id: int) -> O
         selectinload(Booking.hub)
     )
     return await db.scalar(stmt)
+
+
+async def get_booking_by_id(db: AsyncSession, booking_id: int) -> Optional[Booking]:
+    """Получить бронирование по ID"""
+    stmt = select(Booking).where(Booking.id == booking_id).options(
+        selectinload(Booking.user),
+        selectinload(Booking.hub)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_pending_bookings(db: AsyncSession) -> List[Booking]:
+    """Получить все бронирования, ожидающие подтверждения"""
+    stmt = select(Booking).where(
+        Booking.status == BookingStatusEnum.PENDING
+    ).options(
+        selectinload(Booking.user),
+        selectinload(Booking.hub)
+    ).order_by(Booking.start_at)
+    
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_hub_pending_bookings(db: AsyncSession, hub_id: int) -> List[Booking]:
+    """Получить ожидающие подтверждения бронирования хаба"""
+    stmt = select(Booking).where(
+        and_(
+            Booking.hub_id == hub_id,
+            Booking.status == BookingStatusEnum.PENDING
+        )
+    ).options(
+        selectinload(Booking.user),
+        selectinload(Booking.hub)
+    ).order_by(Booking.start_at)
+    
+    result = await db.execute(stmt)
+    return list(result.scalars().all())

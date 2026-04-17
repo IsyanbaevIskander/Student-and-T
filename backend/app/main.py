@@ -3,7 +3,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.endpoints import auth, hubs, bookings, mentors, admin
+from app.api.endpoints import auth, hubs, bookings, mentors, admin, hub_admin
 from app.db.base import Base
 from app.db.session import engine
 from app.db.models import * # Import models to register them with Base.metadata
@@ -38,6 +38,8 @@ api_router.include_router(hubs.router, prefix="/hubs", tags=["hubs"])
 api_router.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
 api_router.include_router(mentors.router, prefix="/mentors", tags=["mentors"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(hub_admin.router, prefix="/hub-admin", tags=["hub-admin"])
+
 
 app.include_router(api_router)
 
