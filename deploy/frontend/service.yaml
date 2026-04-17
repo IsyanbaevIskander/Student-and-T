@@ -1,15 +1,12 @@
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
   name: frontend-app-service
-  labels:
-    app: frontend-app
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: frontend-app
   ports:
-    - name: http
-      port: 80
-      targetPort: 5173
-      protocol: TCP
+  - port: 80
+    targetPort: 5173
+    nodePort: 32000
