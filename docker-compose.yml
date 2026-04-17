@@ -43,7 +43,7 @@ services:
     container_name: student_t_frontend
     restart: always
     environment:
-      - VITE_API_URL=http://backend:8000/api
+      - VITE_API_URL=http://localhost:8000/api/v1
     ports:
       - "5173:5173"
     volumes:

@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
         window.location.href = '/login'
       }
     }
-    
+
     // Детальное логирование сетевых ошибок (когда нет ответа от сервера)
     if (!error.response) {
       console.error('СЕТЕВАЯ ОШИБКА (проверьте бэкенд или CORS):', {
@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
         code: error.code
       })
     }
-    
+
     return Promise.reject(error)
   }
 )
