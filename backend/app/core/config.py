@@ -17,7 +17,8 @@ class Settings:
     # Email settings (Mail.ru)
     MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "timkazy@mail.ru")
     MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD", "LXrKIRT0UUbEJzpfiS92")
-    MAIL_FROM: str = os.getenv("MAIL_FROM", "timkazy@mail.ru")
+    # MAIL_FROM: str = os.getenv("MAIL_FROM", "timkazy@mail.ru")
+    MAIL_FROM: str = os.getenv("MAIL_FROM", "")
     MAIL_PORT: int = int(os.getenv("MAIL_PORT", 465))
     MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.mail.ru")
     MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "False").lower() == "true"
