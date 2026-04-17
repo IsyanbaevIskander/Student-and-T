@@ -18,12 +18,15 @@ class UserInBooking(BaseModel):
     id: int
     first_name: Optional[str] = ""
     last_name: Optional[str] = ""
+    middle_name: Optional[str] = ""
     phone_number: Optional[str] = ""
     email: str
 
 class HubInBooking(BaseModel):
     id: int
     name: str
+
+from app.schemas.event import EventRead
 
 class BookingResponse(BaseModel):
     id: int
@@ -39,8 +42,10 @@ class BookingResponse(BaseModel):
     qr_code: Optional[str] = None
     event_description: Optional[str] = None
     event_attendees: Optional[int] = None
+    event: Optional[EventRead] = None
     user: Optional[UserInBooking] = None
     hub: Optional[HubInBooking] = None
+    mentor: Optional[UserInBooking] = None
 
     class Config:
         from_attributes = True

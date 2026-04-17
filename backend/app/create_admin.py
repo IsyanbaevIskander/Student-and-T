@@ -5,7 +5,13 @@ from app.db.models import User, RoleEnum
 from app.core.security import get_password_hash
 from sqlalchemy import select
 
+from app.db.base import Base
+
 async def create_admin():
+    # Создаем таблицы, если их вдруг нет
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     email = "admin@mail.ru"
     password = "iskander"
     

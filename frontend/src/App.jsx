@@ -10,6 +10,8 @@ import BookSpacePage from './pages/user/BookSpacePage'
 import HubDetailPage from './pages/user/HubDetailPage'
 import AdminHubsPage from './pages/admin/AdminHubsPage'
 import MentorsPage from './pages/user/MentorsPage'
+import AfishaPage from './pages/events/AfishaPage'
+import JoinEventPage from './pages/events/JoinEventPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -21,12 +23,14 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
+          <Route path="afisha" element={<AfishaPage />} />
           
           {/* Маршруты для всех авторизованных (любой роли) */}
           <Route element={<ProtectedRoute />}>
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="book-space" element={<BookSpacePage />} />
             <Route path="hubs/:id" element={<HubDetailPage />} />
+            <Route path="events/join/:code" element={<JoinEventPage />} />
             
             {/* Админские маршруты */}
             <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>

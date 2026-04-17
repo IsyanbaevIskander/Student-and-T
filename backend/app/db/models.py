@@ -29,6 +29,12 @@ class BookingTypeEnum(str, enum.Enum):
     INDIVIDUAL = "INDIVIDUAL"
     EVENT = "EVENT"
 
+class MentorRequestStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    COMPLETED = "COMPLETED"
+
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -40,6 +46,8 @@ class User(Base):
     last_name: Mapped[str | None] = mapped_column(String, nullable=True, default="")
     middle_name: Mapped[str | None] = mapped_column(String, nullable=True, default="")
     phone_number: Mapped[str | None] = mapped_column(String, nullable=True, default="")
+    
+    bookings: Mapped[List["Booking"]] = relationship(back_populates="user")
 
 class Hub(Base):
     __tablename__ = "hubs"
@@ -48,7 +56,8 @@ class Hub(Base):
     location: Mapped[str] = mapped_column(String)
     info: Mapped[str | None] = mapped_column(String, nullable=True)
     
-    bookings: Mapped[List["Booking"]] = relationship(back_populates="hub")
+    hub_bookings: Mapped[List["Booking"]] = relationship(back_populates="hub")
+    events: Mapped[List["Event"]] = relationship(back_populates="hub")
 
 class Room(Base):
     __tablename__ = "rooms"
@@ -65,6 +74,29 @@ class Seat(Base):
     position_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
     position_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+class EventStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class Event(Base):
+    __tablename__ = "events"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    creator_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    hub_id: Mapped[int] = mapped_column(ForeignKey("hubs.id"))
+    max_attendees: Mapped[int] = mapped_column(Integer, default=10)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[EventStatusEnum] = mapped_column(Enum(EventStatusEnum), default=EventStatusEnum.PENDING)
+    invite_code: Mapped[str] = mapped_column(String, unique=True, index=True)
+    
+    creator: Mapped["User"] = relationship()
+    hub: Mapped["Hub"] = relationship(back_populates="events")
+    participants: Mapped[List["Booking"]] = relationship(back_populates="event")
+
 class Booking(Base):
     __tablename__ = "bookings"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -78,20 +110,12 @@ class Booking(Base):
     is_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
     booking_type: Mapped[BookingTypeEnum] = mapped_column(Enum(BookingTypeEnum), default=BookingTypeEnum.INDIVIDUAL)
     qr_code: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Поля для массовых мероприятий (EVENT)
-    event_description: Mapped[str | None] = mapped_column(String, nullable=True)
-    event_attendees: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
 
-    user: Mapped["User"] = relationship()
-    hub: Mapped["Hub"] = relationship(back_populates="bookings")
-
-# Добавим новые модели и поля
-
-class MentorRequestStatusEnum(str, enum.Enum):
-    PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
-    REJECTED = "REJECTED"
-    COMPLETED = "COMPLETED"
+    user: Mapped["User"] = relationship(back_populates="bookings")
+    hub: Mapped["Hub"] = relationship(back_populates="hub_bookings")
+    event: Mapped[Optional["Event"]] = relationship(back_populates="participants")
+    mentor_requests: Mapped[List["BroadcastMentorRequest"]] = relationship("BroadcastMentorRequest", back_populates="booking")
 
 class MentorRequest(Base):
     """Запрос на встречу от студента к ментору"""
@@ -131,6 +155,7 @@ class MentorProfile(Base):
     )
     
     # Связи
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     tags: Mapped[list["MentorTag"]] = relationship("MentorTag", cascade="all, delete-orphan")
     slots: Mapped[list["MentorSlot"]] = relationship("MentorSlot", back_populates="mentor")
 
@@ -145,3 +170,20 @@ class MentorSlot(Base):
     
     # Связь
     mentor: Mapped["MentorProfile"] = relationship("MentorProfile", back_populates="slots")
+
+class BroadcastMentorRequest(Base):
+    """Запрос на ментора по стеку для бронирования (мероприятия)"""
+    __tablename__ = "broadcast_mentor_requests"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id"))
+    stack: Mapped[str] = mapped_column(String)  # Например, "Python"
+    status: Mapped[MentorRequestStatusEnum] = mapped_column(
+        Enum(MentorRequestStatusEnum), default=MentorRequestStatusEnum.PENDING
+    )
+    mentor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    student: Mapped["User"] = relationship("User", foreign_keys=[student_id])
+    booking: Mapped["Booking"] = relationship("Booking", back_populates="mentor_requests")
+    mentor: Mapped["User"] = relationship("User", foreign_keys=[mentor_id])

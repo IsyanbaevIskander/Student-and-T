@@ -1,3 +1,4 @@
+import { eventsApi } from '../../api/events'
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
@@ -24,8 +25,10 @@ const HubDetailPage = () => {
     first_name: '',
     middle_name: '',
     phone_number: '',
+    event_title: '',
     event_description: '',
-    event_attendees: 1,
+    max_attendees: 10,
+    is_public: true,
     start_time: '09:00',
     end_time: '21:00'
   })
@@ -75,18 +78,18 @@ const HubDetailPage = () => {
     setBookingLoading(true)
     try {
       // 1. Если данные пользователя изменились или были пустыми, обновляем профиль
-      if (
-        formData.first_name !== user?.first_name ||
-        formData.last_name !== user?.last_name ||
-        formData.phone_number !== user?.phone_number
-      ) {
-        await updateUser({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          middle_name: formData.middle_name,
-          phone_number: formData.phone_number
-        })
-      }
+      // if (
+      // formData.first_name !== user?.first_name ||
+      // formData.last_name !== user?.last_name ||
+      // formData.phone_number !== user?.phone_number
+      // ) {
+      // await updateUser({
+      // first_name: formData.first_name,
+      // last_name: formData.last_name,
+      // middle_name: formData.middle_name,
+      // phone_number: formData.phone_number
+      // })
+      // }
 
       // 2. Создаем бронирование
       const startAt = new Date(bookingDate)
@@ -96,7 +99,7 @@ const HubDetailPage = () => {
       const endAt = new Date(bookingDate)
       const [endH, endM] = formData.end_time.split(':')
       endAt.setHours(parseInt(endH), parseInt(endM), 0, 0)
-      
+
       // Небольшая валидация
       if (endAt <= startAt) {
         setError('Время окончания должно быть позже времени начала')
@@ -104,16 +107,28 @@ const HubDetailPage = () => {
         return
       }
 
-      const bookingPayload = {
-        hub_id: parseInt(id),
-        start_at: startAt.toISOString(),
-        end_at: endAt.toISOString(),
-        booking_type: bookingType,
-        event_description: bookingType === 'EVENT' ? formData.event_description : null,
-        event_attendees: bookingType === 'EVENT' ? parseInt(formData.event_attendees) : null
+      let result;
+      if (bookingType === 'EVENT') {
+        const eventPayload = {
+          hub_id: parseInt(id),
+          title: formData.event_title || "Мероприятие",
+          description: formData.event_description,
+          start_time: startAt.toISOString(),
+          end_time: endAt.toISOString(),
+          max_attendees: parseInt(formData.max_attendees) || 10,
+          is_public: formData.is_public
+        };
+        result = await eventsApi.createEvent(eventPayload);
+      } else {
+        const bookingPayload = {
+          hub_id: parseInt(id),
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          booking_type: 'INDIVIDUAL',
+        };
+        result = await createBooking(bookingPayload);
       }
 
-      const result = await createBooking(bookingPayload)
       setBookedData(Array.isArray(result) ? result[0] : result)
     } catch (err) {
       // Выводим только текст ошибки без статус-кодов
@@ -292,26 +307,63 @@ const HubDetailPage = () => {
             {bookingType === 'EVENT' && (
               <div className="space-y-4 pt-4 border-t border-gray-100">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-400 ml-1">Опишите мероприятие</label>
+                  <label className="text-sm font-bold text-gray-400 ml-1">Название мероприятия</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Напр: Воркшоп по React"
+                    value={formData.event_title}
+                    onChange={e => setFormData({ ...formData, event_title: e.target.value })}
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Описание</label>
                   <textarea
                     required
                     rows="3"
-                    placeholder="Лекция по Python, семинар по архитектуре и т.д."
+                    placeholder="Подробно расскажите, о чем будет мероприятие..."
                     value={formData.event_description}
                     onChange={e => setFormData({ ...formData, event_description: e.target.value })}
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
                   ></textarea>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-400 ml-1">Кол-во людей</label>
+                  <label className="text-sm font-bold text-gray-400 ml-1">Макс. количество участников</label>
                   <input
                     required
                     type="number"
                     min="1"
-                    value={formData.event_attendees}
-                    onChange={e => setFormData({ ...formData, event_attendees: e.target.value })}
+                    value={formData.max_attendees}
+                    onChange={e => setFormData({ ...formData, max_attendees: parseInt(e.target.value) })}
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-tbank-yellow transition"
                   />
+                </div>
+
+                <div className="pt-4 space-y-3">
+                  <label className="text-sm font-bold text-gray-400 ml-1">Тип мероприятия</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, is_public: true })}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-start gap-1 ${formData.is_public
+                        ? 'border-tbank-yellow bg-yellow-50/50'
+                        : 'border-gray-100 bg-gray-50/30'}`}
+                    >
+                      <span className={`text-sm font-bold ${formData.is_public ? 'text-black' : 'text-gray-500'}`}>🌐 Публичное</span>
+                      <span className="text-[10px] text-gray-400 text-left">Будет отображаться в общей Афише сервиса</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, is_public: false })}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col items-start gap-1 ${!formData.is_public
+                        ? 'border-tbank-yellow bg-yellow-50/50'
+                        : 'border-gray-100 bg-gray-50/30'}`}
+                    >
+                      <span className={`text-sm font-bold ${!formData.is_public ? 'text-black' : 'text-gray-500'}`}>🔒 Приватное</span>
+                      <span className="text-[10px] text-gray-400 text-left">Доступ только по прямой коду приглашения</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -356,8 +408,8 @@ const HubDetailPage = () => {
             </div>
             <h3 className="text-3xl font-bold mb-4">Заявка принята!</h3>
             <p className="text-gray-500 mb-8">
-              {bookedData.status === 'APPROVED' 
-                ? 'Ваше бронирование успешно создано. Вы можете использовать QR-код ниже для входа.' 
+              {bookedData.status === 'APPROVED'
+                ? 'Ваше бронирование успешно создано. Вы можете использовать QR-код ниже для входа.'
                 : 'Ваша заявка на мероприятие отправлена на рассмотрение. После одобрения администратором QR-код появится в личном кабинете.'}
             </p>
 
@@ -374,6 +426,33 @@ const HubDetailPage = () => {
                 <span className="text-4xl mb-4">⏳</span>
                 <p className="text-sm font-bold text-yellow-800 text-center">Ожидайте подтверждения</p>
                 <p className="text-xs text-yellow-600 mt-2 text-center">Мы уведомим вас, как только администратор рассмотрит заявку</p>
+              </div>
+            )}
+
+            {bookedData.invite_code && (
+              <div className="mb-8 p-6 bg-blue-50 rounded-3xl border border-blue-100">
+                <p className="text-xs font-bold text-blue-400 mb-2 uppercase tracking-widest text-center">Ссылка для приглашения</p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={`${window.location.origin}/events/join/${bookedData.invite_code}`}
+                    className="flex-1 bg-white border border-blue-200 rounded-xl px-4 py-2 text-xs text-blue-700 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/events/join/${bookedData.invite_code}`);
+                      alert('Ссылка скопирована!');
+                    }}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-700 transition"
+                  >
+                    Копировать
+                  </button>
+                </div>
+                <p className="text-[10px] text-blue-400 mt-2 text-center">
+                  {bookedData.is_public 
+                    ? 'По этой ссылке друзья смогут записаться быстрее' 
+                    : 'Это единственный способ попасть на ваше приватное мероприятие'}
+                </p>
               </div>
             )}
 

@@ -18,6 +18,7 @@ const Header = () => {
         <div className="flex gap-6 items-center">
           <Link to="/" className="hover:text-tbank-yellow transition">Главная</Link>
           <Link to="/book-space" className="hover:text-tbank-yellow transition">Бронирование</Link>
+          <Link to="/afisha" className="hover:text-tbank-yellow transition">Афиша</Link>
           <Link to="/mentors" className="hover:text-tbank-yellow transition">Менторы</Link>
           
           {isAuthenticated ? (

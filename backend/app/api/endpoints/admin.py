@@ -8,6 +8,8 @@ from app.db.models import RoleEnum, ApplicationStatusEnum, MentorRequestStatusEn
 from app.schemas.user import UserResponse
 from app.schemas.mentor import MentorProfileResponse, MentorRequestResponse
 from app.schemas.hub import HubCreate, HubResponse
+from app.schemas.event import EventRead, EventStatusUpdate
+from app.db.models import Event, EventStatusEnum
 
 router = APIRouter()
 
@@ -114,7 +116,22 @@ async def get_pending_applications(
         raise HTTPException(status_code=403, detail="Только для администраторов")
     
     applications = await crud_mentor.get_pending_applications(db)
-    return applications
+    
+    from app.schemas.mentor import MentorTagResponse
+    return [
+        MentorProfileResponse(
+            user_id=app.user_id,
+            user_email=app.user.email if app.user else None,
+            first_name=app.user.first_name if app.user else None,
+            last_name=app.user.last_name if app.user else None,
+            hub_id=app.hub_id,
+            bio=app.bio,
+            resume_url=app.resume_url,
+            skills=app.skills,
+            status=app.status,
+            tags=[MentorTagResponse(id=tag.id, tag_name=tag.tag_name) for tag in (app.tags or [])]
+        ) for app in applications
+    ]
 
 
 @router.put("/mentor-applications/{user_id}/approve", response_model=MentorProfileResponse)
@@ -144,6 +161,9 @@ async def approve_mentor_application(
     from app.schemas.mentor import MentorTagResponse
     return MentorProfileResponse(
         user_id=profile_full.user_id,
+        user_email=profile_full.user.email if profile_full.user else None,
+        first_name=profile_full.user.first_name if profile_full.user else None,
+        last_name=profile_full.user.last_name if profile_full.user else None,
         hub_id=profile_full.hub_id,
         bio=profile_full.bio,
         resume_url=profile_full.resume_url,
@@ -166,7 +186,21 @@ async def reject_mentor_application(
     profile = await crud_mentor.update_application_status(db, user_id, ApplicationStatusEnum.REJECTED)
     if not profile:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
-    return profile
+        
+    profile_full = await crud_mentor.get_mentor_profile_full(db, user_id)
+    from app.schemas.mentor import MentorTagResponse
+    return MentorProfileResponse(
+        user_id=profile_full.user_id,
+        user_email=profile_full.user.email if profile_full.user else None,
+        first_name=profile_full.user.first_name if profile_full.user else None,
+        last_name=profile_full.user.last_name if profile_full.user else None,
+        hub_id=profile_full.hub_id,
+        bio=profile_full.bio,
+        resume_url=profile_full.resume_url,
+        skills=profile_full.skills,
+        status=profile_full.status,
+        tags=[MentorTagResponse(id=tag.id, tag_name=tag.tag_name) for tag in (profile_full.tags or [])]
+    )
 
 
 @router.delete("/mentors/{user_id}")
@@ -321,3 +355,66 @@ async def create_test_data(
         "message": "Тестовые данные созданы",
         "hub_id": hub_id
     }
+
+
+# ==================== Модерация мероприятий ====================
+
+@router.get("/events/pending", response_model=list[EventRead])
+async def get_pending_events(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Админ: получить список мероприятий, ожидающих одобрения"""
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
+    stmt = select(Event).where(Event.status == EventStatusEnum.PENDING).options(
+        selectinload(Event.creator),
+        selectinload(Event.hub)
+    )
+    result = await db.execute(stmt)
+    events = result.scalars().all()
+    # Обогащаем количеством участников
+    for e in events:
+        e.attendees_count = len(e.participants)
+    return events
+
+
+@router.put("/events/{event_id}/approve", response_model=EventRead)
+async def approve_event(
+    event_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Админ: одобрить мероприятие"""
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
+    event = await crud_event.update_event_status(
+        db, event_id, EventStatusUpdate(status=EventStatusEnum.APPROVED)
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    
+    event.attendees_count = len(event.participants)
+    return event
+
+
+@router.put("/events/{event_id}/reject", response_model=EventRead)
+async def reject_event(
+    event_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Админ: отклонить мероприятие"""
+    if current_user.role != RoleEnum.ADMIN:
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    
+    event = await crud_event.update_event_status(
+        db, event_id, EventStatusUpdate(status=EventStatusEnum.REJECTED)
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+    
+    event.attendees_count = len(event.participants)
+    return event

@@ -4,7 +4,10 @@ from sqlalchemy import select, and_, delete
 from sqlalchemy.orm import selectinload
 from datetime import datetime
 
-from app.db.models import MentorProfile, MentorSlot, MentorTag, MentorRequest, Hub, ApplicationStatusEnum, MentorRequestStatusEnum
+from app.db.models import (
+    MentorProfile, MentorSlot, MentorTag, MentorRequest, 
+    Hub, ApplicationStatusEnum, MentorRequestStatusEnum, BroadcastMentorRequest, Booking
+)
 from app.schemas.mentor import MentorApplyRequest, MentorProfileUpdate, MentorSlotCreate
 
 
@@ -20,7 +23,10 @@ async def get_mentor_profile_full(db: AsyncSession, user_id: int) -> Optional[Me
     """Получить профиль ментора с тегами"""
     stmt = select(MentorProfile).where(
         MentorProfile.user_id == user_id
-    ).options(selectinload(MentorProfile.tags))
+    ).options(
+        selectinload(MentorProfile.tags),
+        selectinload(MentorProfile.user)
+    )
     
     result = await db.execute(stmt)
     profile = result.scalar_one_or_none()
@@ -30,7 +36,10 @@ async def get_mentor_profile_full(db: AsyncSession, user_id: int) -> Optional[Me
 
 async def get_all_mentor_profiles(db: AsyncSession, status: ApplicationStatusEnum = None) -> list[MentorProfile]:
     """Получить все профили менторов (опционально по статусу)"""
-    stmt = select(MentorProfile).options(selectinload(MentorProfile.tags))
+    stmt = select(MentorProfile).options(
+        selectinload(MentorProfile.tags),
+        selectinload(MentorProfile.user)
+    )
     if status:
         stmt = stmt.where(MentorProfile.status == status)
     result = await db.execute(stmt)
@@ -60,22 +69,30 @@ async def apply_for_mentor(db: AsyncSession, user_id: int, obj_in: MentorApplyRe
         user_id=user_id,
         hub_id=obj_in.hub_id,
         status=ApplicationStatusEnum.PENDING,
-        bio=None,
+        bio=obj_in.bio,
         resume_url=None,
-        skills=None
+        skills=obj_in.skills
     )
     
     db.add(profile)
+    await db.flush()
+
+    # Добавляем теги
+    if obj_in.tags:
+        for tag_name in obj_in.tags:
+            tag = MentorTag(mentor_id=profile.user_id, tag_name=tag_name.strip())
+            db.add(tag)
+
     await db.commit()
     await db.refresh(profile)
-    
     return profile
 
 
 async def get_pending_applications(db: AsyncSession) -> list[MentorProfile]:
     """Получить все ожидающие заявки"""
     stmt = select(MentorProfile).where(MentorProfile.status == ApplicationStatusEnum.PENDING).options(
-        selectinload(MentorProfile.tags)
+        selectinload(MentorProfile.tags),
+        selectinload(MentorProfile.user)
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -121,7 +138,7 @@ async def update_mentor_profile_full(db: AsyncSession, user_id: int, obj_in: Men
     
     # Обновляем теги
     if obj_in.tags is not None:
-        await update_mentor_tags(db, user_id, obj_in.tags)
+        await update_mentor_tags(db, profile.user_id, obj_in.tags)
     
     await db.commit()
     await db.refresh(profile)
@@ -147,10 +164,10 @@ async def update_mentor_tags(db: AsyncSession, mentor_id: int, tags: list[str]) 
     # Создаём новые
     new_tags = []
     for tag_name in tags:
-        tag = MentorTag(mentor_id=mentor_id, tag_name=tag_name.strip().lower())
+        tag = MentorTag(mentor_id=mentor_id, tag_name=tag_name.strip())
         db.add(tag)
         new_tags.append(tag)
-    await db.commit()
+    await db.flush()
     return new_tags
 
 
@@ -336,7 +353,10 @@ async def search_mentors_by_tags(db: AsyncSession, tags: list[str]) -> list[Ment
     """Поиск менторов по тегам"""
     stmt = select(MentorProfile).where(
         MentorProfile.status == ApplicationStatusEnum.APPROVED
-    ).options(selectinload(MentorProfile.tags))
+    ).options(
+        selectinload(MentorProfile.tags),
+        selectinload(MentorProfile.user)
+    )
     
     result = await db.execute(stmt)
     profiles = list(result.scalars().all())
@@ -352,3 +372,76 @@ async def search_mentors_by_tags(db: AsyncSession, tags: list[str]) -> list[Ment
         return filtered
     
     return profiles
+# ==================== Broadcast (Рассылка) ====================
+
+async def create_broadcast_request(
+    db: AsyncSession,
+    student_id: int,
+    booking_id: int,
+    stack: str
+) -> BroadcastMentorRequest:
+    """Создать широковещательный запрос на ментора"""
+    db_obj = BroadcastMentorRequest(
+        student_id=student_id,
+        booking_id=booking_id,
+        stack=stack.strip()
+    )
+    db.add(db_obj)
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj
+
+async def get_available_broadcast_requests(
+    db: AsyncSession,
+    mentor_tags: list[str]
+) -> list[BroadcastMentorRequest]:
+    """Получить доступные широковещательные запросы для ментора по его тегам"""
+    stmt = select(BroadcastMentorRequest).where(
+        and_(
+            BroadcastMentorRequest.status == MentorRequestStatusEnum.PENDING,
+            BroadcastMentorRequest.stack.in_([t.strip() for t in mentor_tags])
+        )
+    ).options(
+        selectinload(BroadcastMentorRequest.student),
+        selectinload(BroadcastMentorRequest.booking)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+async def accept_broadcast_request(
+    db: AsyncSession,
+    request_id: int,
+    mentor_id: int
+) -> Optional[BroadcastMentorRequest]:
+    """Ментор принимает широковещательный запрос"""
+    stmt = select(BroadcastMentorRequest).where(
+        and_(
+            BroadcastMentorRequest.id == request_id,
+            BroadcastMentorRequest.status == MentorRequestStatusEnum.PENDING
+        )
+    )
+    request = await db.scalar(stmt)
+    if not request:
+        return None
+    
+    # Занимаем запрос
+    request.status = MentorRequestStatusEnum.ACCEPTED
+    request.mentor_id = mentor_id
+    
+    await db.commit()
+    await db.refresh(request)
+    return request
+
+async def get_mentor_broadcast_requests(
+    db: AsyncSession,
+    mentor_id: int
+) -> list[BroadcastMentorRequest]:
+    """Получить запросы, принятые данным ментором"""
+    stmt = select(BroadcastMentorRequest).where(
+        BroadcastMentorRequest.mentor_id == mentor_id
+    ).options(
+        selectinload(BroadcastMentorRequest.student),
+        selectinload(BroadcastMentorRequest.booking)
+    ).order_by(BroadcastMentorRequest.created_at.desc())
+    result = await db.execute(stmt)
+    return list(result.scalars().all())

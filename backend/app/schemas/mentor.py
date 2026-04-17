@@ -6,6 +6,9 @@ from app.db.models import ApplicationStatusEnum, MentorRequestStatusEnum
 # ---- Заявка на менторство ----
 class MentorApplyRequest(BaseModel):
     hub_id: int
+    bio: Optional[str] = None
+    skills: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 # ---- Теги ----
 class MentorTagCreate(BaseModel):
@@ -21,6 +24,9 @@ class MentorTagResponse(BaseModel):
 # ---- Профиль ментора с тегами ----
 class MentorProfileResponse(BaseModel):
     user_id: int
+    user_email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     hub_id: int
     bio: Optional[str] = None
     resume_url: Optional[str] = None
@@ -83,3 +89,24 @@ class MentorRequestResponse(BaseModel):
 
 class MentorRequestUpdate(BaseModel):
     status: MentorRequestStatusEnum
+# ---- Рассылка запросов по стеку (Broadcast) ----
+class BroadcastMentorRequestCreate(BaseModel):
+    booking_id: int
+    stack: str
+
+class BroadcastMentorRequestResponse(BaseModel):
+    id: int
+    student_id: int
+    booking_id: int
+    stack: str
+    status: MentorRequestStatusEnum
+    mentor_id: Optional[int] = None
+    created_at: datetime
+    
+    # Доп. инфо для отображения
+    student_name: Optional[str] = None
+    event_title: Optional[str] = None
+    booking_start: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True

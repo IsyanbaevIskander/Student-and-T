@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.utils.file_validator import FileValidator
 from app.core.config import settings
+from app.core.constants import TECH_STACKS
 from app.api import deps
 from app.crud import crud_mentor, crud_user
 from app.db.models import RoleEnum, ApplicationStatusEnum, MentorProfile, MentorRequestStatusEnum
@@ -15,7 +16,7 @@ from app.schemas.mentor import (
     MentorApplyRequest, MentorProfileResponse, MentorProfileUpdate,
     MentorSlotCreate, MentorSlotResponse, MentorSearchRequest,
     MentorMeetingRequest, MentorRequestResponse, MentorRequestUpdate,
-    MentorTagResponse
+    MentorTagResponse, BroadcastMentorRequestCreate, BroadcastMentorRequestResponse
 )
 
 router = APIRouter()
@@ -24,6 +25,9 @@ def _profile_to_response(profile: MentorProfile) -> MentorProfileResponse:
     """Преобразует модель MentorProfile в Pydantic схему"""
     return MentorProfileResponse(
         user_id=profile.user_id,
+        user_email=profile.user.email if profile.user else None,
+        first_name=profile.user.first_name if profile.user else None,
+        last_name=profile.user.last_name if profile.user else None,
         hub_id=profile.hub_id,
         bio=profile.bio,
         resume_url=profile.resume_url,
@@ -50,22 +54,18 @@ async def apply_for_mentor(
         )
     
     # Создаем профиль
-    profile = await crud_mentor.apply_for_mentor(
-        db, 
-        user_id=current_user.id, 
-        obj_in=apply_in
-    )
+    try:
+        profile = await crud_mentor.apply_for_mentor(
+            db, 
+            user_id=current_user.id, 
+            obj_in=apply_in
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
-    # Возвращаем базовый профиль без попытки загрузить теги
-    return MentorProfileResponse(
-        user_id=profile.user_id,
-        hub_id=profile.hub_id,
-        bio=profile.bio,
-        resume_url=profile.resume_url,
-        skills=profile.skills,
-        status=profile.status,
-        tags=[]  # Пустой список тегов для нового профиля
-    )
+    # Получаем полный профиль с загруженными связями
+    profile_full = await crud_mentor.get_mentor_profile_full(db, current_user.id)
+    return _profile_to_response(profile_full)
 
 # ---- Профиль ментора с тегами ----
 @router.get("/profile/{user_id}", response_model=MentorProfileResponse)
@@ -77,16 +77,7 @@ async def get_mentor_profile(
     if not profile:
         raise HTTPException(status_code=404, detail="Ментор не найден")
     
-    # Явно преобразуем в Pydantic модель
-    return MentorProfileResponse(
-        user_id=profile.user_id,
-        hub_id=profile.hub_id,
-        bio=profile.bio,
-        resume_url=profile.resume_url,
-        skills=profile.skills,
-        status=profile.status,
-        tags=[MentorTagResponse(id=tag.id, tag_name=tag.tag_name) for tag in profile.tags]
-    )
+    return _profile_to_response(profile)
 
 @router.put("/profile", response_model=MentorProfileResponse)
 async def update_profile(
@@ -95,13 +86,13 @@ async def update_profile(
     profile_in: MentorProfileUpdate,
     current_user = Depends(deps.get_current_active_user)
 ) -> Any:
-    if current_user.role != RoleEnum.MENTOR:
-        raise HTTPException(status_code=403, detail="Только для менторов")
-    
     # Проверяем существование профиля
     profile = await crud_mentor.get_mentor_profile(db, user_id=current_user.id)
     if not profile:
         raise HTTPException(status_code=404, detail="Профиль ментора не найден")
+    
+    # Разрешаем изменять свой профиль владельцу
+    # (даже если еще не одобрен администратором)
     
     # Обновляем профиль
     await crud_mentor.update_mentor_profile_full(
@@ -112,17 +103,7 @@ async def update_profile(
     
     # Получаем обновленный профиль
     profile_full = await crud_mentor.get_mentor_profile_full(db, current_user.id)
-    
-    # Явно преобразуем в Pydantic модель
-    return MentorProfileResponse(
-        user_id=profile_full.user_id,
-        hub_id=profile_full.hub_id,
-        bio=profile_full.bio,
-        resume_url=profile_full.resume_url,
-        skills=profile_full.skills,
-        status=profile_full.status,
-        tags=[MentorTagResponse(id=tag.id, tag_name=tag.tag_name) for tag in profile_full.tags]
-    )
+    return _profile_to_response(profile_full)
 
 # ---- Загрузка резюме (PDF) ----
 @router.post("/profile/resume")
@@ -382,3 +363,139 @@ async def book_room_as_mentor(
     )
     
     return {"status": "booked", "booking": booking}
+# ---- Широковещательные запросы (Broadcast) ----
+
+@router.post("/broadcast-request", response_model=BroadcastMentorRequestResponse)
+async def create_broadcast_request(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    request_in: BroadcastMentorRequestCreate,
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Студент создает широковещательный запрос по стеку"""
+    # Проверяем, что бронирование принадлежит студенту
+    from app.crud import crud_booking
+    booking = await crud_booking.get_booking(db, id=request_in.booking_id)
+    if not booking or booking.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Бронирование не найдено")
+    
+    request = await crud_mentor.create_broadcast_request(
+        db,
+        student_id=current_user.id,
+        booking_id=request_in.booking_id,
+        stack=request_in.stack
+    )
+    
+    # Обогащаем данными для ответа
+    from app.crud import crud_event
+    event = await crud_event.get_event(db, id=booking.event_id) if booking.event_id else None
+    
+    return BroadcastMentorRequestResponse(
+        id=request.id,
+        student_id=request.student_id,
+        booking_id=request.booking_id,
+        stack=request.stack,
+        status=request.status,
+        mentor_id=request.mentor_id,
+        created_at=request.created_at,
+        student_name=current_user.email,
+        event_title=event.title if event else "Индивидуальное бронирование",
+        booking_start=booking.start_at
+    )
+
+@router.get("/broadcast-requests/available", response_model=List[BroadcastMentorRequestResponse])
+async def get_available_broadcast_requests(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Ментор видит доступные запросы по своему стеку"""
+    if current_user.role != RoleEnum.MENTOR:
+        raise HTTPException(status_code=403, detail="Только для менторов")
+    
+    profile = await crud_mentor.get_mentor_profile_full(db, current_user.id)
+    if not profile or profile.status != ApplicationStatusEnum.APPROVED:
+        raise HTTPException(status_code=403, detail="Ваш профиль ментора не одобрен")
+    
+    mentor_tags = [tag.tag_name for tag in profile.tags]
+    requests = await crud_mentor.get_available_broadcast_requests(db, mentor_tags)
+    
+    result = []
+    for req in requests:
+        # Обогащаем данными
+        from app.crud import crud_event
+        event = await crud_event.get_event(db, id=req.booking.event_id) if req.booking.event_id else None
+        
+        result.append(BroadcastMentorRequestResponse(
+            id=req.id,
+            student_id=req.student_id,
+            booking_id=req.booking_id,
+            stack=req.stack,
+            status=req.status,
+            mentor_id=req.mentor_id,
+            created_at=req.created_at,
+            student_name=f"{req.student.first_name} {req.student.last_name} {req.student.middle_name or ''}".strip() or req.student.email if req.student else None,
+            event_title=event.title if event else "Индивидуальное бронирование",
+            booking_start=req.booking.start_at
+        ))
+    
+    return result
+
+@router.get("/broadcast-requests/my", response_model=List[BroadcastMentorRequestResponse])
+async def get_my_broadcast_requests(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Ментор видит принятые им запросы"""
+    if current_user.role != RoleEnum.MENTOR:
+        raise HTTPException(status_code=403, detail="Только для менторов")
+    
+    requests = await crud_mentor.get_mentor_broadcast_requests(db, current_user.id)
+    
+    result = []
+    for req in requests:
+        from app.crud import crud_event
+        event = await crud_event.get_event(db, id=req.booking.event_id) if req.booking.event_id else None
+        
+        result.append(BroadcastMentorRequestResponse(
+            id=req.id,
+            student_id=req.student_id,
+            booking_id=req.booking_id,
+            stack=req.stack,
+            status=req.status,
+            mentor_id=req.mentor_id,
+            created_at=req.created_at,
+            student_name=f"{req.student.first_name} {req.student.last_name} {req.student.middle_name or ''}".strip() or req.student.email if req.student else None,
+            event_title=event.title if event else "Индивидуальное бронирование",
+            booking_start=req.booking.start_at
+        ))
+    return result
+
+
+@router.put("/broadcast-requests/{request_id}/accept", response_model=BroadcastMentorRequestResponse)
+async def accept_broadcast_request(
+    request_id: int,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user = Depends(deps.get_current_active_user)
+) -> Any:
+    """Ментор принимает широковещательный запрос"""
+    if current_user.role != RoleEnum.MENTOR:
+        raise HTTPException(status_code=403, detail="Только для менторов")
+    
+    request = await crud_mentor.accept_broadcast_request(db, request_id, current_user.id)
+    if not request:
+        raise HTTPException(status_code=400, detail="Запрос уже принят или не существует")
+    
+    return BroadcastMentorRequestResponse(
+        id=request.id,
+        student_id=request.student_id,
+        booking_id=request.booking_id,
+        stack=request.stack,
+        status=request.status,
+        mentor_id=request.mentor_id,
+        created_at=request.created_at
+    )
+
+@router.get("/tech-stacks", response_model=List[str])
+async def get_tech_stacks():
+    """Получить список доступных технологий"""
+    return TECH_STACKS

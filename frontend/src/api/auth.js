@@ -13,7 +13,7 @@ export const register = async (userData) => {
       email: userData.email,
       password: userData.password,
     }
-    
+
     if (userData.tg_username && userData.tg_username.trim() !== '') {
       payload.tg_username = userData.tg_username.trim()
     }
@@ -45,12 +45,12 @@ export const login = async (email, password) => {
         'Content-Type': 'application/x-www-form-urlencoded'
       }
     })
-    
+
     // Сохраняем токен в localStorage
     if (response.data.access_token) {
       localStorage.setItem('access_token', response.data.access_token)
     }
-    
+
     // Получаем загруженный профиль
     const meResponse = await apiClient.get('/auth/me');
     localStorage.setItem('user', JSON.stringify(meResponse.data))

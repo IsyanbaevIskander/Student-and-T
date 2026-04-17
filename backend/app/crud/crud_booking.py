@@ -3,20 +3,25 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from app.db.models import Booking, BookingTypeEnum, BookingStatusEnum
+from app.db.models import Booking, BookingTypeEnum, BookingStatusEnum, Event, BroadcastMentorRequest, MentorRequestStatusEnum
 from app.schemas.booking import BookingCreate, BookingStatusUpdate
 from datetime import datetime
 
-async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) -> List[Booking]:
-    bookings = []
-    qr_code = str(uuid.uuid4())
-    
-    # Передаем даты как есть, SQLAlchemy с timezone=True сам все обработает
-    start_at = obj_in.start_at
-    end_at = obj_in.end_at
+def _attach_mentor_info(booking: Booking):
+    """Вручную прикрепляет mentor из запросов к объекту бронирования"""
+    booking.mentor = None
+    if hasattr(booking, 'mentor_requests') and booking.mentor_requests:
+        for req in booking.mentor_requests:
+            if req.status == MentorRequestStatusEnum.ACCEPTED:
+                booking.mentor = req.mentor
+                break
 
+async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) -> List[Booking]:
+    bookings_list = []
+    
     # Проверка на дубликаты (одна бронь в день на пользователя)
     from datetime import datetime, time
+    start_at = obj_in.start_at
     day_start = datetime.combine(start_at.date(), time.min)
     day_end = datetime.combine(start_at.date(), time.max)
     
@@ -39,16 +44,14 @@ async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) 
                 seat_id=seat_id,
                 room_id=obj_in.room_id,
                 hub_id=obj_in.hub_id,
-                start_at=start_at,
-                end_at=end_at,
+                start_at=obj_in.start_at,
+                end_at=obj_in.end_at,
                 booking_type=obj_in.booking_type,
                 status=BookingStatusEnum.APPROVED if obj_in.booking_type == BookingTypeEnum.INDIVIDUAL else BookingStatusEnum.PENDING,
-                qr_code=str(uuid.uuid4()),  # Уникальный QR для каждого места
-                event_description=obj_in.event_description,
-                event_attendees=obj_in.event_attendees,
+                qr_code=str(uuid.uuid4()),
             )
             db.add(db_obj)
-            bookings.append(db_obj)
+            bookings_list.append(db_obj)
     # Групповая комната или мероприятие
     elif obj_in.room_id or obj_in.hub_id:
         db_obj = Booking(
@@ -56,63 +59,70 @@ async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) 
             room_id=obj_in.room_id,
             hub_id=obj_in.hub_id,
             seat_id=None,
-            start_at=start_at,
-            end_at=end_at,
+            start_at=obj_in.start_at,
+            end_at=obj_in.end_at,
             booking_type=obj_in.booking_type,
             status=BookingStatusEnum.APPROVED if obj_in.booking_type == BookingTypeEnum.INDIVIDUAL else BookingStatusEnum.PENDING,
-            qr_code=qr_code,
-            event_description=obj_in.event_description,
-            event_attendees=obj_in.event_attendees,
+            qr_code=str(uuid.uuid4()),
         )
         db.add(db_obj)
-        bookings.append(db_obj)
+        bookings_list.append(db_obj)
         
     await db.commit()
     
-    # Подгружаем связи для ответа, чтобы избежать ошибок ленивой загрузки в асинхронном режиме
-    created_ids = [b.id for b in bookings]
+    # Подгружаем связи для ответа
+    created_ids = [b.id for b in bookings_list]
     stmt = select(Booking).where(Booking.id.in_(created_ids)).options(
         selectinload(Booking.user),
-        selectinload(Booking.hub)
+        selectinload(Booking.hub),
+        selectinload(Booking.event),
+        selectinload(Booking.mentor_requests).selectinload(BroadcastMentorRequest.mentor)
     )
     result = await db.execute(stmt)
-    return list(result.scalars().all())
-
-async def create_booking_with_status(
-    db: AsyncSession, 
-    user_id: int,
-    room_id: int,
-    start_at: datetime,
-    end_at: datetime,
-    status: str = "PENDING"
-) -> Booking:
-    db_obj = Booking(
-        user_id=user_id,
-        room_id=room_id,
-        start_at=start_at,
-        end_at=end_at,
-        status=status
-    )
-    db.add(db_obj)
-    await db.commit()
-    await db.refresh(db_obj)
-    return db_obj
+    loaded_bookings = list(result.scalars().all())
+    for b in loaded_bookings:
+        _attach_mentor_info(b)
+    return loaded_bookings
 
 async def get_user_bookings(db: AsyncSession, user_id: int) -> List[Booking]:
     stmt = select(Booking).where(Booking.user_id == user_id).options(
         selectinload(Booking.user),
-        selectinload(Booking.hub)
+        selectinload(Booking.hub),
+        selectinload(Booking.event).selectinload(Event.hub),
+        selectinload(Booking.mentor_requests).selectinload(BroadcastMentorRequest.mentor)
     ).order_by(Booking.start_at.desc())
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    bookings_list = list(result.scalars().all())
+    for b in bookings_list:
+        _attach_mentor_info(b)
+    return bookings_list
+
+async def get_booking(db: AsyncSession, id: int) -> Optional[Booking]:
+    stmt = select(Booking).where(Booking.id == id).options(
+        selectinload(Booking.user),
+        selectinload(Booking.hub),
+        selectinload(Booking.event),
+        selectinload(Booking.mentor_requests).selectinload(BroadcastMentorRequest.mentor)
+    )
+    result = await db.execute(stmt)
+    booking = result.scalar_one_or_none()
+    if booking:
+        _attach_mentor_info(booking)
+    return booking
 
 async def get_all_bookings(db: AsyncSession) -> List[Booking]:
-    stmt = select(Booking).where(Booking.booking_type == BookingTypeEnum.EVENT).options(
+    # Для админов показываем всё
+    stmt = select(Booking).options(
         selectinload(Booking.user),
-        selectinload(Booking.hub)
+        selectinload(Booking.hub),
+        selectinload(Booking.event),
+        selectinload(Booking.mentor_requests).selectinload(BroadcastMentorRequest.mentor)
     ).order_by(Booking.start_at.desc())
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    bookings_list = list(result.scalars().all())
+    for b in bookings_list:
+        _attach_mentor_info(b)
+    return bookings_list
 
 async def update_booking_status(db: AsyncSession, booking_id: int, obj_in: BookingStatusUpdate) -> Optional[Booking]:
     stmt = select(Booking).where(Booking.id == booking_id)
@@ -123,11 +133,7 @@ async def update_booking_status(db: AsyncSession, booking_id: int, obj_in: Booki
     await db.commit()
     
     # Перевыбираем со связями
-    stmt = select(Booking).where(Booking.id == booking_id).options(
-        selectinload(Booking.user),
-        selectinload(Booking.hub)
-    )
-    return await db.scalar(stmt)
+    return await get_booking(db, booking_id)
 
 async def check_in_booking(db: AsyncSession, booking_id: int, user_id: int) -> Optional[Booking]:
     stmt = select(Booking).where(Booking.id == booking_id).where(Booking.user_id == user_id)
@@ -138,8 +144,4 @@ async def check_in_booking(db: AsyncSession, booking_id: int, user_id: int) -> O
     await db.commit()
     
     # Перевыбираем со связями
-    stmt = select(Booking).where(Booking.id == booking_id).options(
-        selectinload(Booking.user),
-        selectinload(Booking.hub)
-    )
-    return await db.scalar(stmt)
+    return await get_booking(db, booking_id)

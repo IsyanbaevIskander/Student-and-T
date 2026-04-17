@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { getMentors, requestMentorship } from '../../api/mentors'
+import { getMentors, requestMeeting as requestMentorship } from '../../api/mentors'
 import { getUserBookings, updateBookingMentor } from '../../api/bookings'
 import { useAuth } from '../../hooks/useAuth'
 import Loader from '../../components/ui/Loader'
@@ -60,16 +60,18 @@ const MentorsPage = () => {
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
       filtered = filtered.filter(mentor =>
-        `${mentor.firstName} ${mentor.lastName}`.toLowerCase().includes(searchLower) ||
-        mentor.bio.toLowerCase().includes(searchLower) ||
-        mentor.technologies.some(tech => tech.toLowerCase().includes(searchLower))
+        `${mentor.first_name || ''} ${mentor.last_name || ''}`.toLowerCase().includes(searchLower) ||
+        (mentor.bio && mentor.bio.toLowerCase().includes(searchLower)) ||
+        (mentor.tags && mentor.tags.some(tag => tag.tag_name.toLowerCase().includes(searchLower))) ||
+        (mentor.skills && mentor.skills.toLowerCase().includes(searchLower))
       )
     }
     
     // Фильтр по технологии
     if (selectedTechnology && selectedTechnology !== 'all') {
       filtered = filtered.filter(mentor =>
-        mentor.technologies.some(tech => tech.toLowerCase() === selectedTechnology.toLowerCase())
+        (mentor.tags && mentor.tags.some(tag => tag.tag_name.toLowerCase() === selectedTechnology.toLowerCase())) ||
+        (mentor.skills && mentor.skills.toLowerCase().includes(selectedTechnology.toLowerCase()))
       )
     }
     
@@ -77,7 +79,7 @@ const MentorsPage = () => {
   }, [searchTerm, selectedTechnology, allMentors]) // Срабатывает при изменении фильтров
   
   // Получаем все уникальные технологии из списка менторов
-  const allTechnologies = [...new Set(allMentors.flatMap(m => m.technologies))]
+  const allTechnologies = [...new Set(allMentors.flatMap(m => m.tags ? m.tags.map(t => t.tag_name) : []))]
   
   // Фильтруем бронирования, которые ещё без ментора
   const bookingsWithoutMentor = userBookings.filter(
@@ -104,8 +106,8 @@ const MentorsPage = () => {
     try {
       // Создаем запрос на менторство
       const requestData = {
-        mentorId: mentor.id,
-        mentorName: `${mentor.firstName} ${mentor.lastName}`,
+        mentor_id: mentor.user_id || mentor.id,
+        mentorName: `${mentor.first_name || ''} ${mentor.last_name || ''}`,
         studentId: user.id,
         studentName: `${user.first_name || ''} ${user.last_name || ''}`,
         bookingId: selectedBookingId,
@@ -118,7 +120,7 @@ const MentorsPage = () => {
       // Обновляем бронирование, связывая с запросом
       await updateBookingMentor(parseInt(selectedBookingId), result.id)
       
-      alert(`Запрос ментору ${mentor.firstName} ${mentor.lastName} отправлен!`)
+      alert(`Запрос ментору ${mentor.first_name || ''} ${mentor.last_name || ''} отправлен!`)
       
       // Перезагружаем бронирования
       const updatedBookings = await getUserBookings()
@@ -231,24 +233,29 @@ const MentorsPage = () => {
               <div className="p-6">
                 <div className="flex items-center mb-4">
                   <img 
-                    src={mentor.avatar} 
-                    alt={`${mentor.firstName} ${mentor.lastName}`}
+                    src={mentor.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(mentor.first_name || 'M')}&background=random`} 
+                    alt={`${mentor.first_name} ${mentor.last_name}`}
                     className="w-16 h-16 rounded-full object-cover mr-4"
                   />
                   <div>
                     <h3 className="text-xl font-bold">
-                      {mentor.firstName} {mentor.lastName}
+                      {mentor.first_name} {mentor.last_name}
                     </h3>
-                    <p className="text-gray-600">{mentor.position}</p>
+                    <p className="text-gray-600 font-medium">{mentor.user_email || mentor.position}</p>
                   </div>
                 </div>
                 
                 <p className="text-gray-600 mb-3 line-clamp-3">{mentor.bio}</p>
                 
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {mentor.technologies.slice(0, 5).map((tech, idx) => (
-                    <span key={idx} className="bg-gray-100 px-2 py-1 rounded text-sm">
-                      {tech}
+                  {mentor.tags && mentor.tags.slice(0, 5).map((tag, idx) => (
+                    <span key={idx} className="bg-gray-100 px-2 py-1 rounded text-sm font-bold text-gray-500">
+                      {tag.tag_name}
+                    </span>
+                  ))}
+                  {!mentor.tags && mentor.skills && mentor.skills.split(',').slice(0, 5).map((skill, idx) => (
+                    <span key={idx} className="bg-gray-100 px-2 py-1 rounded text-sm font-bold text-gray-500">
+                      {skill.trim()}
                     </span>
                   ))}
                 </div>
