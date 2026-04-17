@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.models import Booking
 from app.schemas.booking import BookingCreate, BookingStatusUpdate
+from datetime import datetime
 
 async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) -> List[Booking]:
     bookings = []
@@ -35,6 +36,26 @@ async def create_booking(db: AsyncSession, obj_in: BookingCreate, user_id: int) 
     for b in bookings:
         await db.refresh(b)
     return bookings
+
+async def create_booking_with_status(
+    db: AsyncSession, 
+    user_id: int,
+    room_id: int,
+    start_at: datetime,
+    end_at: datetime,
+    status: str = "PENDING"
+) -> Booking:
+    db_obj = Booking(
+        user_id=user_id,
+        room_id=room_id,
+        start_at=start_at,
+        end_at=end_at,
+        status=status
+    )
+    db.add(db_obj)
+    await db.commit()
+    await db.refresh(db_obj)
+    return db_obj
 
 async def get_user_bookings(db: AsyncSession, user_id: int) -> List[Booking]:
     stmt = select(Booking).where(Booking.user_id == user_id)

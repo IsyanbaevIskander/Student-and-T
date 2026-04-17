@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Boolean, Enum, JSON
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 from app.db.base import Base
@@ -30,17 +31,6 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), default=RoleEnum.STUDENT)
     tg_username: Mapped[str | None] = mapped_column(String, nullable=True)
-
-class MentorProfile(Base):
-    __tablename__ = "mentor_profiles"
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    hub_id: Mapped[int] = mapped_column(ForeignKey("hubs.id"))
-    bio: Mapped[str | None] = mapped_column(String, nullable=True)
-    resume_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    skills: Mapped[str | None] = mapped_column(String, nullable=True)
-    status: Mapped[ApplicationStatusEnum] = mapped_column(
-        Enum(ApplicationStatusEnum), default=ApplicationStatusEnum.PENDING
-    )
 
 class Hub(Base):
     __tablename__ = "hubs"
@@ -75,6 +65,56 @@ class Booking(Base):
     status: Mapped[BookingStatusEnum] = mapped_column(Enum(BookingStatusEnum), default=BookingStatusEnum.PENDING)
     is_checked_in: Mapped[bool] = mapped_column(Boolean, default=False)
 
+# Добавим новые модели и поля
+
+class MentorRequestStatusEnum(str, enum.Enum):
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    COMPLETED = "COMPLETED"
+
+class MentorRequest(Base):
+    """Запрос на встречу от студента к ментору"""
+    __tablename__ = "mentor_requests"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    mentor_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    slot_id: Mapped[int] = mapped_column(ForeignKey("mentor_slots.id"))
+    message: Mapped[str] = mapped_column(String, nullable=True)
+    status: Mapped[MentorRequestStatusEnum] = mapped_column(
+        Enum(MentorRequestStatusEnum), default=MentorRequestStatusEnum.PENDING
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    
+    # Связи
+    student: Mapped["User"] = relationship("User", foreign_keys=[student_id])
+    mentor: Mapped["User"] = relationship("User", foreign_keys=[mentor_id])
+    slot: Mapped["MentorSlot"] = relationship("MentorSlot")
+
+# Добавим теги для ментора
+class MentorTag(Base):
+    __tablename__ = "mentor_tags"
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    mentor_id: Mapped[int] = mapped_column(ForeignKey("mentor_profiles.user_id"))
+    tag_name: Mapped[str] = mapped_column(String, index=True)  # например: "FastAPI", "Docker", "React"
+
+# Дополним MentorProfile
+class MentorProfile(Base):
+    __tablename__ = "mentor_profiles"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    hub_id: Mapped[int] = mapped_column(ForeignKey("hubs.id"))
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)  # О себе
+    resume_url: Mapped[str | None] = mapped_column(String, nullable=True)  # Путь к PDF
+    skills: Mapped[str | None] = mapped_column(String, nullable=True)  # Оставим для совместимости
+    status: Mapped[ApplicationStatusEnum] = mapped_column(
+        Enum(ApplicationStatusEnum), default=ApplicationStatusEnum.PENDING
+    )
+    
+    # Связи
+    tags: Mapped[list["MentorTag"]] = relationship("MentorTag", cascade="all, delete-orphan")
+    slots: Mapped[list["MentorSlot"]] = relationship("MentorSlot", back_populates="mentor")
+
+# Дополним MentorSlot
 class MentorSlot(Base):
     __tablename__ = "mentor_slots"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
@@ -82,3 +122,6 @@ class MentorSlot(Base):
     start_at: Mapped[datetime] = mapped_column(DateTime)
     end_at: Mapped[datetime] = mapped_column(DateTime)
     is_booked: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Связь
+    mentor: Mapped["MentorProfile"] = relationship("MentorProfile", back_populates="slots")
