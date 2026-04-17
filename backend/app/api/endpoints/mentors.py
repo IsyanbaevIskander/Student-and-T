@@ -258,7 +258,24 @@ async def request_meeting(
     if not meeting_request:
         raise HTTPException(status_code=400, detail="Слот недоступен или уже забронирован")
     
-    # TODO: Отправить уведомление ментору через Telegram
+    # Отправляем уведомление ментору
+    try:
+        mentor = await crud_user.get_user_by_id(db, request_in.mentor_id)
+        slot = await crud_mentor.get_slot_by_id(db, request_in.slot_id)
+        
+        if mentor and mentor.email and slot:
+            from app.utils.email_sender import EmailSender
+            slot_time = f"{slot.start_at.strftime('%d.%m.%Y %H:%M')} - {slot.end_at.strftime('%H:%M')}"
+            
+            await EmailSender.send_mentor_request_notification(
+                to_email=mentor.email,
+                student_name=current_user.email,
+                slot_time=slot_time,
+                message=request_in.message
+            )
+    except Exception as e:
+        print(f"⚠️ Не удалось отправить email уведомление: {e}")
+    
     return {"status": "request_sent", "request_id": meeting_request.id}
 
 @router.get("/requests/incoming", response_model=List[MentorRequestResponse])
@@ -315,6 +332,16 @@ async def update_request_status(
     if current_user.role != RoleEnum.MENTOR:
         raise HTTPException(status_code=403, detail="Только для менторов")
     
+    # Получаем запрос до обновления (нужно для уведомления)
+    old_request = await crud_mentor.get_mentor_request_by_id(db, request_id)
+    if not old_request:
+        raise HTTPException(status_code=404, detail="Запрос не найден")
+    
+    # Проверяем, что ментор имеет право на этот запрос
+    if old_request.mentor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Это не ваш запрос")
+    
+    # Обновляем статус
     request_obj = await crud_mentor.update_mentor_request_status(
         db, request_id, current_user.id, status_in.status
     )
@@ -322,8 +349,34 @@ async def update_request_status(
     if not request_obj:
         raise HTTPException(status_code=404, detail="Запрос не найден")
     
-    # TODO: Отправить уведомление студенту через Telegram
-    return request_obj
+    # Отправляем уведомление студенту
+    try:
+        student = await crud_user.get_user_by_id(db, request_obj.student_id)
+        slot = await crud_mentor.get_slot_by_id(db, request_obj.slot_id)
+        
+        if student and student.email and slot:
+            from app.utils.email_sender import EmailSender
+            slot_time = f"{slot.start_at.strftime('%d.%m.%Y %H:%M')} - {slot.end_at.strftime('%H:%M')}"
+            
+            await EmailSender.send_mentor_request_response(
+                to_email=student.email,
+                mentor_name=current_user.email,
+                status=status_in.status,
+                slot_time=slot_time
+            )
+    except Exception as e:
+        print(f"⚠️ Не удалось отправить email уведомление: {e}")
+    
+    # Обогащаем ответ данными
+    student = await crud_user.get_user_by_id(db, request_obj.student_id)
+    slot = await crud_mentor.get_slot_by_id(db, request_obj.slot_id)
+    
+    response = MentorRequestResponse.model_validate(request_obj)
+    response.student_name = student.email if student else None
+    response.slot_start = slot.start_at if slot else None
+    response.slot_end = slot.end_at if slot else None
+    
+    return response
 
 # ---- Поиск менторов ----
 @router.post("/search", response_model=dict)

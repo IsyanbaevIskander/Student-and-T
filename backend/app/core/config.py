@@ -13,6 +13,15 @@ class Settings:
     
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     GIGACHAT_CREDENTIALS: str = os.getenv("GIGACHAT_CREDENTIALS", "")
+    
+    # Email settings (Mail.ru)
+    MAIL_USERNAME: str = os.getenv("MAIL_USERNAME", "timkazy@mail.ru")
+    MAIL_PASSWORD: str = os.getenv("MAIL_PASSWORD", "LXrKIRT0UUbEJzpfiS92")
+    MAIL_FROM: str = os.getenv("MAIL_FROM", "timkazy@mail.ru")
+    MAIL_PORT: int = int(os.getenv("MAIL_PORT", 465))
+    MAIL_SERVER: str = os.getenv("MAIL_SERVER", "smtp.mail.ru")
+    MAIL_STARTTLS: bool = os.getenv("MAIL_STARTTLS", "False").lower() == "true"
+    MAIL_SSL_TLS: bool = os.getenv("MAIL_SSL_TLS", "True").lower() == "true"
 
     # File upload settings
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/backend/uploads/resumes")

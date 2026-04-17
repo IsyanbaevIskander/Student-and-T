@@ -329,6 +329,24 @@ async def update_mentor_request_status(
     await db.refresh(request)
     return request
 
+async def get_slot_by_id(db: AsyncSession, slot_id: int) -> Optional[MentorSlot]:
+    """Получить слот по ID"""
+    stmt = select(MentorSlot).where(MentorSlot.id == slot_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def get_mentor_request_by_id(db: AsyncSession, request_id: int) -> Optional[MentorRequest]:
+    """Получить запрос по ID с подгрузкой связей"""
+    stmt = select(MentorRequest).where(MentorRequest.id == request_id)
+    stmt = stmt.options(
+        selectinload(MentorRequest.student),
+        selectinload(MentorRequest.mentor),
+        selectinload(MentorRequest.slot)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
 
 # ==================== Поиск ====================
 
